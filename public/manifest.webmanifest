@@ -1,0 +1,10 @@
+{
+  "name": "Card Fair Booth",
+  "short_name": "Card Fair",
+  "start_url": "/booth",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EEF2F8",
+  "theme_color": "#32AAFF",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
