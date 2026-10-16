@@ -163,6 +163,12 @@ body.shop-mode .nav, body.shop-mode .sync { display: none !important; }
 .shop-item:last-child { border-bottom: 0; }
 .si-name { font-weight: 850; font-size: var(--t-15); letter-spacing: -.01em; line-height: 1.25; }
 .si-meta { font-size: var(--t-12); color: var(--ink-3); margin: 2px 0 6px; }
+.si-miss { margin-top: 2px; font-size: var(--t-11); font-weight: 700; color: var(--ink-2); }
+.ms-est { display: grid; gap: 8px; }
+.ms-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--r-2); background: var(--surface); }
+.ms-row.alt { opacity: .8; }
+.ms-row b { font-weight: 800; } .ms-row small { display: block; font-size: var(--t-12); color: var(--ink-3); }
+.ms-val { font-variant-numeric: tabular-nums; font-size: var(--t-15); }
 .si-meta b { color: var(--ink-2); font-weight: 750; }
 .si-ed { font-size: var(--t-12); color: var(--ink-3); font-weight: 650; margin-left: 2px; }
 .si-price { text-align: right; font-weight: 900; font-size: var(--t-20); letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -1293,12 +1299,18 @@ const PROFILES = { pokemon: POKEMON };
 const ITEM_KINDS = [
   { id: 'single', label: 'Card', name: 'Charizard ex' },
   { id: 'sealed', label: 'Sealed', name: 'Prismatic Evolutions Elite Trainer Box' },
+  { id: 'set', label: 'Master set', name: 'Scarlet & Violet 151 Grand Master Set' },
   { id: 'accessory', label: 'Accessory', name: 'Matte sleeves, 100 ct', cats: ['Sleeves', 'Toploaders', 'Binders', 'Deck boxes', 'Playmats', 'Storage', 'Dice & counters', 'Display'] },
   { id: 'art', label: 'Art & handmade', name: 'Umbreon holo print, 8×10', cats: ['Prints', 'Stickers', 'Pins', 'Keychains', 'Custom cards', 'Commissions', 'Plush', 'Original art'] },
   { id: 'other', label: 'Other', name: 'Mystery pack', cats: ['Mystery packs', 'Bundles', 'Snacks & drinks', 'Services'] },
 ];
 const KIND = Object.fromEntries(ITEM_KINDS.map(k => [k.id, k]));
 const isSingle = it => !it.kind || it.kind === 'single';
+const isSet = it => it.kind === 'set';
+/* A whole set sold together. Grand master = every card, every printing, plus the promos and extras. */
+const SET_TYPES = ['Master set', 'Grand master set', 'Complete set', 'Base set', 'Reverse holo set', 'Secret rares', 'Other'];
+/* "Master set · missing 2" — what a set item is, in a few words. */
+function setSummary(it) { const m = (it.missing || []).filter(Boolean); return [it.setType || 'Master set', it.setCount ? it.setCount + ' cards' : '', m.length ? 'missing ' + m.length : 'complete'].filter(Boolean).join(' · '); }
 const isGoods = it => it.kind === 'accessory' || it.kind === 'art' || it.kind === 'other';
 const RARITY = Object.fromEntries(POKEMON.rarities.map(r => [r.id, r]));
 const COND = Object.fromEntries(POKEMON.conditions.map(c => [c.id, c]));
@@ -1423,7 +1435,7 @@ function blankItem() {
   return {
     id: '', createdAt: 0, updatedAt: 0, dev: '', deleted: false,
     game: 'pokemon',
-    kind: 'single',               // single | sealed | accessory | art | other
+    kind: 'single',               // single | sealed | set | accessory | art | other
     // card + printing
     name: '', supertype: 'Pokémon', mechanic: '', dex: '',
     region: 'intl', language: 'EN',
@@ -1440,6 +1452,8 @@ function blankItem() {
     location: '', sku: '', notes: '', imgUrl: '',
     // sealed / other
     sealedType: '',               // ETB, booster box, bundle, tin, blister, pack, collection box
+    // master sets: the type, how many cards, and what's not in it ("Professor Program Voltorbs")
+    setType: '', setCount: null, missing: [],
     // general goods (accessory, art, other)
     category: '', variant: '', maker: '', barcode: '', description: '',
     // identifiers
@@ -1587,6 +1601,7 @@ function itemTitle(it) { return it.name || 'Untitled'; }
 function itemSub(it) {
   const parts = [];
   if (it.kind === 'sealed') { parts.push(it.sealedType || 'Sealed'); if (it.setName) parts.push(it.setName); }
+  else if (isSet(it)) { if (it.setName) parts.push(it.setName); parts.push(setSummary(it)); }
   else {
     if (it.setName) parts.push(it.setName);
     if (it.number) parts.push('#' + it.number);
@@ -1756,6 +1771,7 @@ function priceLinks(it) {
     const q = card ? [it.name, short].filter(Boolean).join(' ') : it.name;
     out.push({ id: 'tcg', label: 'TCGplayer', href: pid ? `https://www.tcgplayer.com/product/${enc(pid)}` : `https://www.tcgplayer.com/search/${tcgLine}/product?productLineName=${tcgLine}&q=${enc(q)}&view=grid` });
   }
+  if (isSet(it)) { out.push({ id: 'ebay', label: 'eBay sold', href: `https://www.ebay.com/sch/i.html?_nkw=${enc(['pokemon', it.setName || it.name, (it.setType || 'master set').toLowerCase(), langName].filter(Boolean).join(' '))}&LH_Sold=1&LH_Complete=1&_sop=13` }); return out; }
   // eBay sold listings, newest first
   const eq = [it.name, card ? num : '', card && !num ? it.setName : sealed ? it.setName : '', edTxt, finTxt, gradeTxt, langName, card || sealed ? '' : it.maker || ''].filter(Boolean).join(' ');
   out.push({ id: 'ebay', label: 'eBay sold', href: `https://www.ebay.com/sch/i.html?_nkw=${enc(eq)}&LH_Sold=1&LH_Complete=1&_sop=13` });
@@ -1826,20 +1842,53 @@ function locTagHTML(it) { const l = locOf(it); return l ? `<span class="loc">${i
 /* ---------- binders & cases: containers with a size limit ----------
    settings.locations: [{ id, name, type: 'binder'|'case'|'box'|'other', cap (cards, or null),
      show: 'show'|'ask'|'hide', minPrice (cents: "holds cards priced at least…"), overflow (id) }] */
-const LOC_TYPES = [['binder', 'Binder'], ['case', 'Case'], ['box', 'Box'], ['other', 'Other']];
+const LOC_TYPES = [['binder', 'Binder'], ['case', 'Case'], ['box', 'Box'], ['shelf', 'Shelf'], ['other', 'Other']];
+/* Binders, cases and boxes hold cards. Shelves hold stock: sealed, master sets, keychains, stickers… */
+const locForCards = l => !l || ['binder', 'case', 'box'].includes(l.type || 'binder');
+const locNoun = (l, n) => locForCards(l) ? (n === 1 ? 'card' : 'cards') : (n === 1 ? 'item' : 'items');
+const SHELF_NAME_RE = /shelf|shelves|display|rack|peg|stock|table top|tabletop|tote|stand/i;
 function locById(id) { return (S.settings.locations || []).find(l => l.id === id) || null; }
 function locByName(n) { return (S.settings.locations || []).find(l => locKey(l.name) === locKey(n)) || null; }
-/* Cards in a container right now (copies on hand, not listings). */
+/* What's in a container right now (copies on hand, not listings). Binders and cases count cards only,
+   so a keychain parked in one doesn't eat a pocket; shelves count everything on them. */
 function locCount(name) {
-  const k = locKey(name); let n = 0;
-  for (const it of liveItems()) if (!it.sample && locKey(it.location) === k) n += Math.max(0, onHand(it.id));
+  const k = locKey(name), l = locByName(name), cardsOnly = l && locForCards(l); let n = 0;
+  for (const it of liveItems()) if (!it.sample && locKey(it.location) === k && (!cardsOnly || isSingle(it))) n += Math.max(0, onHand(it.id));
   return n;
 }
 function locFill(l, extra = 0) {
   const n = locCount(l.name) + extra, cap = l.cap > 0 ? l.cap : null;
   return { n, cap, room: cap == null ? Infinity : cap - n, over: cap != null && n > cap, full: cap != null && n >= cap, pct: cap ? n / cap * 100 : 0 };
 }
-function locFillText(l) { const f = locFill(l); return f.cap ? `${f.n.toLocaleString()} / ${f.cap.toLocaleString()}` : `${f.n.toLocaleString()} card${f.n === 1 ? '' : 's'}`; }
+function locFillText(l) { const f = locFill(l); return f.cap ? `${f.n.toLocaleString()} / ${f.cap.toLocaleString()}` : `${f.n.toLocaleString()} ${locNoun(l, f.n)}`; }
+/* Earlier builds only had binders: a "binder" named like a shelf with no cards in it becomes a shelf. */
+function fixShelfTypes() {
+  const fix = (S.settings.locations || []).filter(l => (l.type || 'binder') === 'binder' && SHELF_NAME_RE.test(l.name));
+  if (fix.length) saveSettings(s => { for (const l of s.locations) if (fix.some(f => f.id === l.id)) { l.type = 'shelf'; l.minPrice = null; } });
+  // things that had to be entered as "cards" before: sets and goods with no card number
+  let n = 0;
+  for (const it of liveItems()) {
+    if (it.sample || !isSingle(it) || it.number || it.grading || (it.ext && it.ext.tcgdex)) continue;
+    const k = guessKind(it.name); if (!k) continue;
+    put('items', { ...it, ...k, finish: '', pattern: '', priceRule: 'manual' }); n++;
+  }
+  return fix.length + n;
+}
+/* What a name says it is: "151 Grand Master Set" → master set, "Pikachu keychain" → art & handmade. */
+function guessKind(name) {
+  const s = String(name || '');
+  if (/grand\s*master/i.test(s)) return { kind: 'set', setType: 'Grand master set' };
+  if (/master\s*set/i.test(s)) return { kind: 'set', setType: 'Master set' };
+  if (/complete\s*set|full\s*set/i.test(s)) return { kind: 'set', setType: 'Complete set' };
+  const cat = [[/keychain|key\s*chain|charm/i, 'art', 'Keychains'], [/sticker/i, 'art', 'Stickers'], [/\bpins?\b|enamel/i, 'art', 'Pins'], [/plush/i, 'art', 'Plush'], [/\bprint\b/i, 'art', 'Prints'],
+    [/sleeve/i, 'accessory', 'Sleeves'], [/toploader|top\s*loader/i, 'accessory', 'Toploaders'], [/playmat/i, 'accessory', 'Playmats'], [/deck\s*box/i, 'accessory', 'Deck boxes'], [/\bbinder\b/i, 'accessory', 'Binders']].find(([re]) => re.test(s));
+  return cat ? { kind: cat[1], category: cat[2] } : null;
+}
+/* Where something can go: cards to binders and cases first, everything else to shelves first. */
+function locChoices(it) {
+  const locs = S.settings.locations || [], card = !it || isSingle(it);
+  return [...locs.filter(l => locForCards(l) === card), ...locs.filter(l => locForCards(l) !== card)];
+}
 /* Where a full container spills to: its overflow, then that one's overflow, first with room. */
 function overflowFor(l, qty = 1) {
   let o = l && locById(l.overflow), hops = 0, last = null;
@@ -2076,7 +2125,7 @@ function hay(it) {
     it.art.join(' '), it.grading && gradeLabel(it.grading), it.grading && (it.grading.company + it.grading.grade), it.grading && it.grading.cert,
     it.grading ? 'graded slab' : it.condition, it.language, POKEMON.languages[it.language], it.region === 'jp' ? 'japanese jp' : '',
     it.sku, it.barcode, it.category, it.variant, it.maker, it.description, isGoods(it) ? KIND[it.kind].label : '',
-    it.location, it.kind === 'sealed' ? 'sealed ' + it.sealedType : '', (it.tags || []).join(' ')]
+    it.location, it.kind === 'sealed' ? 'sealed ' + it.sealedType : '', isSet(it) ? 'master set ' + (it.setType || '') + ' ' + (it.missing || []).join(' ') : '', (it.tags || []).join(' ')]
     .filter(x => x != null && x !== '').join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   hayCache.set(it.id, { u: it.updatedAt, h }); return h;
 }
@@ -2177,6 +2226,7 @@ const ICON = {
   binder: '<path d="M6 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6z"/><path d="M6 3.5v17M3.5 7.5H6M3.5 12H6M3.5 16.5H6"/><rect x="9.5" y="7" width="6" height="4" rx=".8"/>',
   casebox: '<rect x="3.5" y="6" width="17" height="12" rx="1.6"/><path d="M3.5 10h17"/><rect x="6" y="12" width="3" height="4" rx=".5"/><rect x="10.5" y="12" width="3" height="4" rx=".5"/><rect x="15" y="12" width="3" height="4" rx=".5"/>',
   box: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/>',
+  shelf: '<path d="M3.5 20.5h17M3.5 13.5h17M5 4v16.5M19 4v16.5"/><rect x="7" y="7.5" width="4" height="6" rx=".6"/><rect x="12.5" y="9.5" width="4" height="4" rx=".6"/><rect x="8" y="16" width="7" height="4.5" rx=".6"/>',
   gift: '<rect x="4" y="9" width="16" height="11" rx="1.5"/><path d="M3 9h18v-0.5M12 9v11"/><path d="M12 9c-1.5-3.5-5.5-4-5.5-1.5S9.5 9 12 9zm0 0c1.5-3.5 5.5-4 5.5-1.5S14.5 9 12 9z"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
@@ -2238,6 +2288,7 @@ function metaLine(it) {
     return p.join(' · ');
   }
   if (it.kind === 'sealed') { p.push(it.sealedType || 'Sealed'); if (it.setName) p.push(it.setName); }
+  else if (isSet(it)) { if (it.setName) p.push(esc(it.setName)); p.push(esc(setSummary(it))); }
   else {
     if (it.setName) p.push(esc(it.setName));
     if (it.number) p.push('<span class="mono">' + esc(it.number) + '</span>');
@@ -2253,6 +2304,7 @@ function copyHTML(it) {
   if (it.sample) tags.push('<span class="tag ex">Example</span>');
   if (it.grading) tags.push(`<span class="tag grade">${esc(gradeLabel(it.grading))}</span>`);
   else if (it.kind === 'sealed') tags.push('<span class="tag">Sealed</span>');
+  else if (isSet(it)) tags.push(`<span class="tag foil">${esc(it.setType || 'Master set')}</span>`);
   else if (isGoods(it)) tags.push(`<span class="tag">${esc(KIND[it.kind].label)}</span>`);
   else tags.push(`<span class="tag">${esc(it.condition)}</span>`);
   if (it.finish === 'reverse') tags.push(`<span class="tag foil">${esc(it.pattern ? it.pattern : 'Reverse')}</span>`);
@@ -2338,7 +2390,8 @@ function shopSnapshot({ includeSamples = false } = {}) {
       e: it.kind === 'single' ? [it.edition && editionLabel(it.edition), it.stamp && (it.stamp === 'Other' ? it.stampNote || 'Stamped' : it.stamp + ' stamp')].filter(Boolean).join(' · ') : '',
       g: it.grading ? gradeLabel(it.grading) : '',
       c: it.kind === 'single' && !it.grading ? it.condition : '',
-      st: it.kind === 'sealed' ? it.sealedType || '' : '',
+      st: it.kind === 'sealed' ? it.sealedType || '' : isSet(it) ? it.setType || 'Master set' : '',
+      ms: isSet(it) ? ((it.missing || []).length ? 'Missing ' + it.missing.join(', ') : 'Complete').slice(0, 200) : '',
       ca: goods ? it.category || '' : '', va: goods ? it.variant || '' : '', mk: goods ? it.maker || '' : '',
       gp: goods && it.group ? it.group.slice(-12) : '', ds: goods ? (it.description || '').slice(0, 200) : '',
       ph: [it.photo, ...(it.photos || [])].find(u => u && PHOTO_URL_RE.test(u)) || '',
@@ -2409,7 +2462,7 @@ function shopTick() {
 }
 
 /* ---------- shopper view ---------- */
-function shopHay(x) { return [x.n, x.s, x.no, x.r, x.lg, x.f, x.e, x.g, x.c, x.st, x.ca, x.va, x.mk, x.lo, KIND[x.k] && KIND[x.k].label].join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function shopHay(x) { return [x.n, x.s, x.no, x.r, x.lg, x.f, x.e, x.g, x.c, x.st, x.ms, x.ca, x.va, x.mk, x.lo, KIND[x.k] && KIND[x.k].label].join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 /* Stickers, accessories and art: variants of one product shown together, in a quiet side panel. */
 function shopProducts(list) {
   const m = new Map();
@@ -2434,6 +2487,7 @@ function shopRows() {
     if (SHOP.type === 'cards' && x.k !== 'single') return false;
     if (SHOP.type === 'graded' && !x.g) return false;
     if (SHOP.type === 'sealed' && x.k !== 'sealed') return false;
+    if (SHOP.type === 'sets' && x.k !== 'set') return false;
     if (SHOP.type === 'goods' && !['accessory', 'art', 'other'].includes(x.k)) return false;
     if (SHOP.loc && (x.lo || '') !== SHOP.loc) return false;
     if (!toks.length) return true;
@@ -2446,10 +2500,10 @@ function shopRows() {
 const shopImgs = (x, big) => [x.ph || '', x.im ? x.im + (big ? '/high.webp' : '/low.webp') : '', x.iu ? (big ? x.iu.replace(/_200w\.jpg$/, '_in_1000x1000.jpg') : x.iu) : '', x.ia || ''].filter(Boolean);
 const shopImg = (x, big) => shopImgs(x, big)[0] || '';
 function shopMeta(x) {
-  const meta = ['single', 'sealed'].includes(x.k)
+  const meta = ['single', 'sealed', 'set'].includes(x.k)
     ? [x.st, x.s, x.no && `<span class="mono">${esc(x.no)}</span>`, x.r && `<b>${esc(x.r)}</b>`, x.lg && `<b style="color:var(--stop)">${esc(x.lg)}</b>`]
     : [x.ca, x.va, x.mk && (x.k === 'art' ? 'by ' + x.mk : x.mk)];
-  return meta.filter(Boolean).map(m => m.startsWith && m.startsWith('<') ? m : esc(m)).join(' · ');
+  return meta.filter(Boolean).map(m => m.startsWith && m.startsWith('<') ? m : esc(m)).join(' · ') + (x.ms ? `<div class="si-miss">${esc(x.ms)}</div>` : '');
 }
 function shopTags(x) {
   const tags = [];
@@ -2495,7 +2549,7 @@ function shopZoom(id) {
   const c = el.querySelector('.sz-x'); c && c.focus();
 }
 function shopZoomClose() { const z = document.getElementById('shopZoom'); if (z) { z.remove(); return true; } return false; }
-const SHOP_LOC_ICON = { binder: 'binder', case: 'casebox', box: 'box', other: 'pin' };
+const SHOP_LOC_ICON = { binder: 'binder', case: 'casebox', box: 'box', shelf: 'shelf', other: 'pin' };
 /* Rows grouped by binder / case, in the table's order; ask-me places last, then anything unplaced. */
 function shopGroups(rows) {
   const d = SHOP.data, order = (d.locs || []).map(l => l.n), meta = Object.fromEntries((d.locs || []).map(l => [l.n, l]));
@@ -2540,9 +2594,9 @@ function renderShop() {
   const nItems = d.items.filter(x => !['accessory', 'art', 'other'].includes(x.k)).length + new Set(d.items.filter(x => ['accessory', 'art', 'other'].includes(x.k)).map(x => x.gp || x.i)).size;
   $('#shopSub').innerHTML = `${esc(sh.name || '')}${sh.name ? '<br>' : ''}<span>${nItems} item${nItems === 1 ? '' : 's'} in stock · updated ${timeAgo(d.at)}</span>`;
   $('#shopDeals').innerHTML = d.bins && d.bins.length ? `<div class="shop-deals"><div class="cap">Deal bins at the table</div><div class="sd-row">${d.bins.map(b => `<div class="sd" style="--bin:${b.c};--bin-ink:${b.ink}"><b>${esc(b.h)}</b>${b.l || b.s ? `<small>${esc([b.l, b.s].filter(Boolean).join(' · '))}</small>` : ''}</div>`).join('')}</div></div>` : '';
-  const counts = { cards: 0, graded: 0, sealed: 0, goods: 0 };
-  for (const x of d.items) { if (x.k === 'single') counts.cards++; if (x.g) counts.graded++; if (x.k === 'sealed') counts.sealed++; if (['accessory', 'art', 'other'].includes(x.k)) counts.goods++; }
-  const types = [['all', 'All'], ['cards', 'Cards'], ['graded', 'Graded'], ['sealed', 'Sealed'], ['goods', 'Accessories & art']].filter(([k]) => k === 'all' || counts[k]);
+  const counts = { cards: 0, graded: 0, sealed: 0, sets: 0, goods: 0 };
+  for (const x of d.items) { if (x.k === 'single') counts.cards++; if (x.g) counts.graded++; if (x.k === 'sealed') counts.sealed++; if (x.k === 'set') counts.sets++; if (['accessory', 'art', 'other'].includes(x.k)) counts.goods++; }
+  const types = [['all', 'All'], ['cards', 'Cards'], ['graded', 'Graded'], ['sealed', 'Sealed'], ['sets', 'Master sets'], ['goods', 'Accessories & art']].filter(([k]) => k === 'all' || counts[k]);
   const locs = [...new Set(d.items.map(x => x.lo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (SHOP.loc && !locs.includes(SHOP.loc)) SHOP.loc = '';
   $('#shopFilters').innerHTML = types.map(([k, l]) => `<button class="chip" data-stype="${k}" aria-pressed="${SHOP.type === k}">${l}</button>`).join('') +

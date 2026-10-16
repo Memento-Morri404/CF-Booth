@@ -86,6 +86,19 @@ Any item can be priced by a **deal bin** instead of its own price. It then rings
 - Cards already priced under $1 (from an import, say) are fixed on the next launch. Typing a price under $1 in the editor puts the card in the matching bin.
 - To change the $1 floor, go to **Setup → Pricing → Lowest single**.
 
+## Master sets and shelves
+
+- **Master set** is its own kind of item, next to Card and Sealed.
+  - Pick the set and the kind of set: master, grand master, complete…
+  - Type each card it *doesn't* have and press Enter, e.g. *Professor Program Voltorbs*, *Gold Charizard*, *Pokémon Center promo*.
+  - Shoppers see "Missing …" under the set on your storefront.
+- **Estimate value from TCGplayer** adds up every card and every printing in the set at TCGplayer market, ball patterns included. Grand master extras (promos, stamps) aren't in it, and what's missing isn't taken off. Use it as a starting point, then set your own market and price.
+- **Shelves** hold stock, not cards: sealed, master sets, keychains, stickers. They count *items*.
+  - Binders, cases and boxes count only cards, so a keychain left in one doesn't take a pocket.
+  - Overflow, restock and "Place them" only move cards.
+- A "binder" named like a shelf (*Shelf Stock*, *Display*, *Rack*…) becomes a shelf the next time you open the booth.
+- Things that had to be entered as cards before turn into the right kind when their name makes it clear: a grand master set, keychains, sleeves. Anything else can be switched at the top of its editor.
+
 ## Stickers, accessories and art: variants and photos
 
 Add one with **Add item** and pick **Accessory**, **Art & handmade** or **Other**.

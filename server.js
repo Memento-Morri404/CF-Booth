@@ -152,7 +152,7 @@ function clientIp(req) { return req.headers['cf-connecting-ip'] || (req.headers[
 
 /* The public list carries only shopper fields. Anything else is dropped here
    too, so a mistake in the browser can never publish private data. */
-const SHOP_ITEM_KEYS = ['i', 'n', 'k', 's', 'no', 'r', 'lg', 'f', 'e', 'g', 'c', 'st', 'ca', 'va', 'mk', 'p', 'q', 't', 'im', 'iu', 'ia', 'lo', 'la', 'd', 'dc', 'di', 'gp', 'ph', 'ds'];
+const SHOP_ITEM_KEYS = ['i', 'n', 'k', 's', 'no', 'r', 'lg', 'f', 'e', 'g', 'c', 'st', 'ca', 'va', 'mk', 'p', 'q', 't', 'im', 'iu', 'ia', 'lo', 'la', 'd', 'dc', 'di', 'gp', 'ph', 'ds', 'ms'];
 const PHOTO_URL_RE = /^\/photos\/[\w-]{6,40}\.(jpg|png|webp|gif)$/;
 const IMG_URL_RE = /^https:\/\/(images\.pokemontcg\.io|assets\.tcgdex\.net|product-images\.tcgplayer\.com|tcgplayer-cdn\.tcgplayer\.com)\/[\w\-./%]+$/;
 function cleanStorefront(s) {
@@ -302,6 +302,7 @@ const server = http.createServer(async (req, res) => {
       const cards = await tcg.search(url.searchParams.get('lang') || 'en', url.searchParams.get('q') || '', { set: (url.searchParams.get('set') || '').slice(0, 40) });
       return json(res, 200, { cards });
     }
+    if (p === '/api/setvalue' && req.method === 'GET') return json(res, 200, { sets: tcgplayer.setValue(url.searchParams.get('q') || '', { japanese: url.searchParams.get('lang') === 'ja' }) });
     if (p === '/api/sealed' && req.method === 'GET') return json(res, 200, { products: tcgplayer.searchSealed(url.searchParams.get('q') || '', { japanese: url.searchParams.get('lang') === 'ja' }) });
     if (p === '/api/tcg/setlist' && req.method === 'GET') return json(res, 200, { sets: await tcg.setList(url.searchParams.get('lang') || 'en') });
     if (p.startsWith('/api/tcg/card/') && req.method === 'GET') {

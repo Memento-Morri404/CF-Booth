@@ -163,6 +163,12 @@ body.shop-mode .nav, body.shop-mode .sync { display: none !important; }
 .shop-item:last-child { border-bottom: 0; }
 .si-name { font-weight: 850; font-size: var(--t-15); letter-spacing: -.01em; line-height: 1.25; }
 .si-meta { font-size: var(--t-12); color: var(--ink-3); margin: 2px 0 6px; }
+.si-miss { margin-top: 2px; font-size: var(--t-11); font-weight: 700; color: var(--ink-2); }
+.ms-est { display: grid; gap: 8px; }
+.ms-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--r-2); background: var(--surface); }
+.ms-row.alt { opacity: .8; }
+.ms-row b { font-weight: 800; } .ms-row small { display: block; font-size: var(--t-12); color: var(--ink-3); }
+.ms-val { font-variant-numeric: tabular-nums; font-size: var(--t-15); }
 .si-meta b { color: var(--ink-2); font-weight: 750; }
 .si-ed { font-size: var(--t-12); color: var(--ink-3); font-weight: 650; margin-left: 2px; }
 .si-price { text-align: right; font-weight: 900; font-size: var(--t-20); letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -1128,7 +1134,7 @@ select.in.loc-sel, #invLoc, #sLoc { width: auto; max-width: 240px; height: 34px;
 <script>
 "use strict";
 const CF_TARGET = "booth";
-const SHELL_HTML = "", PAGE_CODE = "", CF_BUILD = "50238c7a71";
+const SHELL_HTML = "", PAGE_CODE = "", CF_BUILD = "3d6454da16";
 /* ==========================================================================
    GAME PROFILE: Pokémon TCG
    Configuration, not code. A second game adds another profile object with
@@ -1293,12 +1299,18 @@ const PROFILES = { pokemon: POKEMON };
 const ITEM_KINDS = [
   { id: 'single', label: 'Card', name: 'Charizard ex' },
   { id: 'sealed', label: 'Sealed', name: 'Prismatic Evolutions Elite Trainer Box' },
+  { id: 'set', label: 'Master set', name: 'Scarlet & Violet 151 Grand Master Set' },
   { id: 'accessory', label: 'Accessory', name: 'Matte sleeves, 100 ct', cats: ['Sleeves', 'Toploaders', 'Binders', 'Deck boxes', 'Playmats', 'Storage', 'Dice & counters', 'Display'] },
   { id: 'art', label: 'Art & handmade', name: 'Umbreon holo print, 8×10', cats: ['Prints', 'Stickers', 'Pins', 'Keychains', 'Custom cards', 'Commissions', 'Plush', 'Original art'] },
   { id: 'other', label: 'Other', name: 'Mystery pack', cats: ['Mystery packs', 'Bundles', 'Snacks & drinks', 'Services'] },
 ];
 const KIND = Object.fromEntries(ITEM_KINDS.map(k => [k.id, k]));
 const isSingle = it => !it.kind || it.kind === 'single';
+const isSet = it => it.kind === 'set';
+/* A whole set sold together. Grand master = every card, every printing, plus the promos and extras. */
+const SET_TYPES = ['Master set', 'Grand master set', 'Complete set', 'Base set', 'Reverse holo set', 'Secret rares', 'Other'];
+/* "Master set · missing 2" — what a set item is, in a few words. */
+function setSummary(it) { const m = (it.missing || []).filter(Boolean); return [it.setType || 'Master set', it.setCount ? it.setCount + ' cards' : '', m.length ? 'missing ' + m.length : 'complete'].filter(Boolean).join(' · '); }
 const isGoods = it => it.kind === 'accessory' || it.kind === 'art' || it.kind === 'other';
 const RARITY = Object.fromEntries(POKEMON.rarities.map(r => [r.id, r]));
 const COND = Object.fromEntries(POKEMON.conditions.map(c => [c.id, c]));
@@ -1423,7 +1435,7 @@ function blankItem() {
   return {
     id: '', createdAt: 0, updatedAt: 0, dev: '', deleted: false,
     game: 'pokemon',
-    kind: 'single',               // single | sealed | accessory | art | other
+    kind: 'single',               // single | sealed | set | accessory | art | other
     // card + printing
     name: '', supertype: 'Pokémon', mechanic: '', dex: '',
     region: 'intl', language: 'EN',
@@ -1440,6 +1452,8 @@ function blankItem() {
     location: '', sku: '', notes: '', imgUrl: '',
     // sealed / other
     sealedType: '',               // ETB, booster box, bundle, tin, blister, pack, collection box
+    // master sets: the type, how many cards, and what's not in it ("Professor Program Voltorbs")
+    setType: '', setCount: null, missing: [],
     // general goods (accessory, art, other)
     category: '', variant: '', maker: '', barcode: '', description: '',
     // identifiers
@@ -1587,6 +1601,7 @@ function itemTitle(it) { return it.name || 'Untitled'; }
 function itemSub(it) {
   const parts = [];
   if (it.kind === 'sealed') { parts.push(it.sealedType || 'Sealed'); if (it.setName) parts.push(it.setName); }
+  else if (isSet(it)) { if (it.setName) parts.push(it.setName); parts.push(setSummary(it)); }
   else {
     if (it.setName) parts.push(it.setName);
     if (it.number) parts.push('#' + it.number);
@@ -1756,6 +1771,7 @@ function priceLinks(it) {
     const q = card ? [it.name, short].filter(Boolean).join(' ') : it.name;
     out.push({ id: 'tcg', label: 'TCGplayer', href: pid ? `https://www.tcgplayer.com/product/${enc(pid)}` : `https://www.tcgplayer.com/search/${tcgLine}/product?productLineName=${tcgLine}&q=${enc(q)}&view=grid` });
   }
+  if (isSet(it)) { out.push({ id: 'ebay', label: 'eBay sold', href: `https://www.ebay.com/sch/i.html?_nkw=${enc(['pokemon', it.setName || it.name, (it.setType || 'master set').toLowerCase(), langName].filter(Boolean).join(' '))}&LH_Sold=1&LH_Complete=1&_sop=13` }); return out; }
   // eBay sold listings, newest first
   const eq = [it.name, card ? num : '', card && !num ? it.setName : sealed ? it.setName : '', edTxt, finTxt, gradeTxt, langName, card || sealed ? '' : it.maker || ''].filter(Boolean).join(' ');
   out.push({ id: 'ebay', label: 'eBay sold', href: `https://www.ebay.com/sch/i.html?_nkw=${enc(eq)}&LH_Sold=1&LH_Complete=1&_sop=13` });
@@ -1826,20 +1842,53 @@ function locTagHTML(it) { const l = locOf(it); return l ? `<span class="loc">${i
 /* ---------- binders & cases: containers with a size limit ----------
    settings.locations: [{ id, name, type: 'binder'|'case'|'box'|'other', cap (cards, or null),
      show: 'show'|'ask'|'hide', minPrice (cents: "holds cards priced at least…"), overflow (id) }] */
-const LOC_TYPES = [['binder', 'Binder'], ['case', 'Case'], ['box', 'Box'], ['other', 'Other']];
+const LOC_TYPES = [['binder', 'Binder'], ['case', 'Case'], ['box', 'Box'], ['shelf', 'Shelf'], ['other', 'Other']];
+/* Binders, cases and boxes hold cards. Shelves hold stock: sealed, master sets, keychains, stickers… */
+const locForCards = l => !l || ['binder', 'case', 'box'].includes(l.type || 'binder');
+const locNoun = (l, n) => locForCards(l) ? (n === 1 ? 'card' : 'cards') : (n === 1 ? 'item' : 'items');
+const SHELF_NAME_RE = /shelf|shelves|display|rack|peg|stock|table top|tabletop|tote|stand/i;
 function locById(id) { return (S.settings.locations || []).find(l => l.id === id) || null; }
 function locByName(n) { return (S.settings.locations || []).find(l => locKey(l.name) === locKey(n)) || null; }
-/* Cards in a container right now (copies on hand, not listings). */
+/* What's in a container right now (copies on hand, not listings). Binders and cases count cards only,
+   so a keychain parked in one doesn't eat a pocket; shelves count everything on them. */
 function locCount(name) {
-  const k = locKey(name); let n = 0;
-  for (const it of liveItems()) if (!it.sample && locKey(it.location) === k) n += Math.max(0, onHand(it.id));
+  const k = locKey(name), l = locByName(name), cardsOnly = l && locForCards(l); let n = 0;
+  for (const it of liveItems()) if (!it.sample && locKey(it.location) === k && (!cardsOnly || isSingle(it))) n += Math.max(0, onHand(it.id));
   return n;
 }
 function locFill(l, extra = 0) {
   const n = locCount(l.name) + extra, cap = l.cap > 0 ? l.cap : null;
   return { n, cap, room: cap == null ? Infinity : cap - n, over: cap != null && n > cap, full: cap != null && n >= cap, pct: cap ? n / cap * 100 : 0 };
 }
-function locFillText(l) { const f = locFill(l); return f.cap ? `${f.n.toLocaleString()} / ${f.cap.toLocaleString()}` : `${f.n.toLocaleString()} card${f.n === 1 ? '' : 's'}`; }
+function locFillText(l) { const f = locFill(l); return f.cap ? `${f.n.toLocaleString()} / ${f.cap.toLocaleString()}` : `${f.n.toLocaleString()} ${locNoun(l, f.n)}`; }
+/* Earlier builds only had binders: a "binder" named like a shelf with no cards in it becomes a shelf. */
+function fixShelfTypes() {
+  const fix = (S.settings.locations || []).filter(l => (l.type || 'binder') === 'binder' && SHELF_NAME_RE.test(l.name));
+  if (fix.length) saveSettings(s => { for (const l of s.locations) if (fix.some(f => f.id === l.id)) { l.type = 'shelf'; l.minPrice = null; } });
+  // things that had to be entered as "cards" before: sets and goods with no card number
+  let n = 0;
+  for (const it of liveItems()) {
+    if (it.sample || !isSingle(it) || it.number || it.grading || (it.ext && it.ext.tcgdex)) continue;
+    const k = guessKind(it.name); if (!k) continue;
+    put('items', { ...it, ...k, finish: '', pattern: '', priceRule: 'manual' }); n++;
+  }
+  return fix.length + n;
+}
+/* What a name says it is: "151 Grand Master Set" → master set, "Pikachu keychain" → art & handmade. */
+function guessKind(name) {
+  const s = String(name || '');
+  if (/grand\s*master/i.test(s)) return { kind: 'set', setType: 'Grand master set' };
+  if (/master\s*set/i.test(s)) return { kind: 'set', setType: 'Master set' };
+  if (/complete\s*set|full\s*set/i.test(s)) return { kind: 'set', setType: 'Complete set' };
+  const cat = [[/keychain|key\s*chain|charm/i, 'art', 'Keychains'], [/sticker/i, 'art', 'Stickers'], [/\bpins?\b|enamel/i, 'art', 'Pins'], [/plush/i, 'art', 'Plush'], [/\bprint\b/i, 'art', 'Prints'],
+    [/sleeve/i, 'accessory', 'Sleeves'], [/toploader|top\s*loader/i, 'accessory', 'Toploaders'], [/playmat/i, 'accessory', 'Playmats'], [/deck\s*box/i, 'accessory', 'Deck boxes'], [/\bbinder\b/i, 'accessory', 'Binders']].find(([re]) => re.test(s));
+  return cat ? { kind: cat[1], category: cat[2] } : null;
+}
+/* Where something can go: cards to binders and cases first, everything else to shelves first. */
+function locChoices(it) {
+  const locs = S.settings.locations || [], card = !it || isSingle(it);
+  return [...locs.filter(l => locForCards(l) === card), ...locs.filter(l => locForCards(l) !== card)];
+}
 /* Where a full container spills to: its overflow, then that one's overflow, first with room. */
 function overflowFor(l, qty = 1) {
   let o = l && locById(l.overflow), hops = 0, last = null;
@@ -2280,7 +2329,7 @@ function hay(it) {
     it.art.join(' '), it.grading && gradeLabel(it.grading), it.grading && (it.grading.company + it.grading.grade), it.grading && it.grading.cert,
     it.grading ? 'graded slab' : it.condition, it.language, POKEMON.languages[it.language], it.region === 'jp' ? 'japanese jp' : '',
     it.sku, it.barcode, it.category, it.variant, it.maker, it.description, isGoods(it) ? KIND[it.kind].label : '',
-    it.location, it.kind === 'sealed' ? 'sealed ' + it.sealedType : '', (it.tags || []).join(' ')]
+    it.location, it.kind === 'sealed' ? 'sealed ' + it.sealedType : '', isSet(it) ? 'master set ' + (it.setType || '') + ' ' + (it.missing || []).join(' ') : '', (it.tags || []).join(' ')]
     .filter(x => x != null && x !== '').join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   hayCache.set(it.id, { u: it.updatedAt, h }); return h;
 }
@@ -2381,6 +2430,7 @@ const ICON = {
   binder: '<path d="M6 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5H6z"/><path d="M6 3.5v17M3.5 7.5H6M3.5 12H6M3.5 16.5H6"/><rect x="9.5" y="7" width="6" height="4" rx=".8"/>',
   casebox: '<rect x="3.5" y="6" width="17" height="12" rx="1.6"/><path d="M3.5 10h17"/><rect x="6" y="12" width="3" height="4" rx=".5"/><rect x="10.5" y="12" width="3" height="4" rx=".5"/><rect x="15" y="12" width="3" height="4" rx=".5"/>',
   box: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/>',
+  shelf: '<path d="M3.5 20.5h17M3.5 13.5h17M5 4v16.5M19 4v16.5"/><rect x="7" y="7.5" width="4" height="6" rx=".6"/><rect x="12.5" y="9.5" width="4" height="4" rx=".6"/><rect x="8" y="16" width="7" height="4.5" rx=".6"/>',
   gift: '<rect x="4" y="9" width="16" height="11" rx="1.5"/><path d="M3 9h18v-0.5M12 9v11"/><path d="M12 9c-1.5-3.5-5.5-4-5.5-1.5S9.5 9 12 9zm0 0c1.5-3.5 5.5-4 5.5-1.5S14.5 9 12 9z"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
@@ -2442,6 +2492,7 @@ function metaLine(it) {
     return p.join(' · ');
   }
   if (it.kind === 'sealed') { p.push(it.sealedType || 'Sealed'); if (it.setName) p.push(it.setName); }
+  else if (isSet(it)) { if (it.setName) p.push(esc(it.setName)); p.push(esc(setSummary(it))); }
   else {
     if (it.setName) p.push(esc(it.setName));
     if (it.number) p.push('<span class="mono">' + esc(it.number) + '</span>');
@@ -2457,6 +2508,7 @@ function copyHTML(it) {
   if (it.sample) tags.push('<span class="tag ex">Example</span>');
   if (it.grading) tags.push(`<span class="tag grade">${esc(gradeLabel(it.grading))}</span>`);
   else if (it.kind === 'sealed') tags.push('<span class="tag">Sealed</span>');
+  else if (isSet(it)) tags.push(`<span class="tag foil">${esc(it.setType || 'Master set')}</span>`);
   else if (isGoods(it)) tags.push(`<span class="tag">${esc(KIND[it.kind].label)}</span>`);
   else tags.push(`<span class="tag">${esc(it.condition)}</span>`);
   if (it.finish === 'reverse') tags.push(`<span class="tag foil">${esc(it.pattern ? it.pattern : 'Reverse')}</span>`);
@@ -2781,6 +2833,7 @@ function browseRows() {
     if (f.type === 'goods') return isGoods(it);
     if (f.type === 'graded') return !!it.grading;
     if (f.type === 'sealed') return it.kind === 'sealed';
+    if (f.type === 'sets') return isSet(it);
     if (f.type === 'jp') return !isGoods(it) && it.region !== 'intl';
     return true;
   });
@@ -2815,7 +2868,7 @@ function renderFilters() {
   const el = $('#filters'); if (!el) return;
   const f = REG.f, all = liveItems();
   const sets = new Map(); for (const it of all) { const k = it.setName || '—'; sets.set(k, (sets.get(k) || 0) + 1); }
-  const types = [['all', 'All'], ['raw', 'Raw'], ['graded', 'Graded'], ['sealed', 'Sealed'], ['goods', 'Accessories & art'], ['jp', 'Japanese & Asian']];
+  const types = [['all', 'All'], ['raw', 'Raw'], ['graded', 'Graded'], ['sealed', 'Sealed'], ['sets', 'Master sets'], ['goods', 'Accessories & art'], ['jp', 'Japanese & Asian']];
   el.innerHTML = `${types.map(([k, l]) => `<button class="chip" data-ftype="${k}" aria-pressed="${f.type === k}">${l}</button>`).join('')}
     ${selectHTML('fSet', [['', 'All sets'], ...[...sets.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([s, n]) => [s, `${s} (${n})`])], f.set, 'aria-label="Set"')}
     ${selectHTML('fSort', SORTS, f.sort, 'aria-label="Sort"')}
@@ -2868,7 +2921,7 @@ function checkRowHTML(it) {
     if (h.floor != null && !opts.some(o => o[1] === h.floor)) opts.push(['Lowest', h.floor]);
     ladder = opts.filter(o => h.list == null || o[1] <= h.list).sort((a, b) => b[1] - a[1]).map(([l, p]) => { const z = haggle(it, st, { offerCents: p }).zone.id; return `<button class="offer-btn" data-z="${z}" data-addat="${it.id}:${p}" title="Add to sale at ${fmt(p)}"><span>${l}</span><b>${fmt(p)}</b></button>`; }).join('');
   }
-  const conds = !it.grading && it.kind !== 'sealed' ? POKEMON.conditions.filter(c => c.id !== it.condition).map(c => `<button class="cond-btn" data-addcond="${it.id}:${c.id}" title="Add to sale as ${c.id}">as ${c.id} <b>${fmt(haggle(it, st, { cond: c.id }).list)}</b></button>`).join('') : '';
+  const conds = !it.grading && isSingle(it) ? POKEMON.conditions.filter(c => c.id !== it.condition).map(c => `<button class="cond-btn" data-addcond="${it.id}:${c.id}" title="Add to sale as ${c.id}">as ${c.id} <b>${fmt(haggle(it, st, { cond: c.id }).list)}</b></button>`).join('') : '';
   const lz = h.firm && h.market ? 'stop' : zoneFor(h.listPct, st).id;
   return `<div class="check-row">
     <div class="check-top">
@@ -2990,7 +3043,7 @@ function lineHTML(l) {
   const it = lineItem(l), h = it ? lineH(l) : null;
   const dropped = it && l.cond && !it.grading && l.cond !== it.condition;
   const under = h && h.floor != null && l.price < h.floor;
-  const metaBits = it ? [it.setName, it.number, it.grading ? gradeLabel(it.grading) : it.kind === 'sealed' ? 'Sealed' : (dropped ? '' : it.condition)].filter(Boolean).map(esc).join(' · ') : 'Custom item';
+  const metaBits = it ? [it.setName, it.number, it.grading ? gradeLabel(it.grading) : it.kind === 'sealed' ? 'Sealed' : isSet(it) ? (it.setType || 'Master set') : !isSingle(it) ? '' : (dropped ? '' : it.condition)].filter(Boolean).map(esc).join(' · ') : 'Custom item';
   const st = S.settings;
   let quick = '';
   if (open && h && h.market) {
@@ -3009,7 +3062,7 @@ function lineHTML(l) {
       <div class="ctl">
         ${stepperHTML(l)}
         ${moneyIn('p_' + l.key, l.price, `data-lprice="${l.key}" aria-label="Price each"`)}
-        ${it && !it.grading && it.kind !== 'sealed' ? `<div style="width:auto">${selectHTML('c_' + l.key, POKEMON.conditions.map(c => { const p = haggle(it, st, { cond: c.id }).list; return [c.id, (c.id === it.condition ? c.id + ' (listed)' : 'as ' + c.id) + (p != null ? ' · ' + fmt(p) : '')]; }), l.cond, `data-lcond="${l.key}" aria-label="Condition"`)}</div>` : ''}
+        ${it && !it.grading && isSingle(it) ? `<div style="width:auto">${selectHTML('c_' + l.key, POKEMON.conditions.map(c => { const p = haggle(it, st, { cond: c.id }).list; return [c.id, (c.id === it.condition ? c.id + ' (listed)' : 'as ' + c.id) + (p != null ? ' · ' + fmt(p) : '')]; }), l.cond, `data-lcond="${l.key}" aria-label="Condition"`)}</div>` : ''}
       </div>
       ${h ? meterHTML(h, { legend: false }) : ''}
       ${under ? `<div class="warn">${fmt(h.floor - l.price)} under your lowest price.</div>` : ''}
@@ -3249,7 +3302,7 @@ function voidSale(id, reason = '') {
    INVENTORY: table, filters, card editor, reprice tool
    ========================================================================== */
 const INV = { q: '', filter: 'all', loc: '', sort: 'name', dir: 1, limit: 200 };
-const INV_FILTERS = [['all', 'All'], ['cards', 'Cards'], ['sealed', 'Sealed'], ['goods', 'Accessories & art'], ['stock', 'In stock'], ['room', 'Has room'], ['firm', 'Firm'], ['nomarket', 'No market'], ['stale', 'Stale market'], ['noprice', 'No price'], ['trade', 'From trades'], ['deal', 'In deal bins'], ['review', 'Needs review']];
+const INV_FILTERS = [['all', 'All'], ['cards', 'Cards'], ['sealed', 'Sealed'], ['sets', 'Master sets'], ['goods', 'Accessories & art'], ['stock', 'In stock'], ['room', 'Has room'], ['firm', 'Firm'], ['nomarket', 'No market'], ['stale', 'Stale market'], ['noprice', 'No price'], ['trade', 'From trades'], ['deal', 'In deal bins'], ['review', 'Needs review']];
 function invRows() {
   const st = S.settings, staleMs = st.staleDays * 864e5;
   let rows = INV.q ? searchItems(INV.q, { limit: 100000 }) : liveItems();
@@ -3260,6 +3313,7 @@ function invRows() {
       case 'stock': return onHand(it.id) > 0;
       case 'cards': return it.kind === 'single';
       case 'sealed': return it.kind === 'sealed';
+      case 'sets': return isSet(it);
       case 'goods': return isGoods(it);
       case 'room': return !h.firm && h.room > 0;
       case 'firm': return h.firm;
@@ -3303,7 +3357,7 @@ VIEWS.inventory = function () {
     </div>`}
     <div class="toolbar inv-tools">
       <input class="in search-sm" id="invQ" type="search" placeholder="Filter items" value="${esc(INV.q)}">
-      ${(st.locations || []).length ? selectHTML('invLoc', [['', 'All binders & cases'], ...st.locations.map(l => [locKey(l.name), l.name + ' · ' + locCount(l.name)]), ['-', 'No binder']], INV.loc, 'aria-label="Binder or case"') : ''}
+      ${(st.locations || []).length ? selectHTML('invLoc', [['', 'Everywhere'], ...st.locations.map(l => [locKey(l.name), l.name + ' · ' + locCount(l.name)]), ['-', 'No binder']], INV.loc, 'aria-label="Binder or case"') : ''}
       <span class="spacer"></span>
       <button class="btn sm" data-act="reprice">Set prices</button><button class="btn sm" data-act="move-loc">${icon('pin')}Move</button>${CF_TARGET === 'booth' ? `<button class="btn sm" data-act="bulk-update">Update prices &amp; details</button>` : `<button class="btn sm" data-act="go-market">Refresh market</button>`}
     </div>
@@ -3405,6 +3459,11 @@ function optAddValues(i, text) {
 /* Option value boxes: Enter (or a comma) adds the value; Backspace on an empty box removes the last one. */
 function edKey(e) {
   const t = e.target;
+  if (t.dataset && t.dataset.missadd != null) {
+    if (e.key === 'Enter' || (e.key === 'Tab' && t.value.trim())) { e.preventDefault(); if (t.value.trim()) missAdd(t.value); }
+    else if (e.key === 'Backspace' && !t.value && EDIT.missing.length) { EDIT.missing.pop(); redrawMiss(); }
+    return;
+  }
   if (t.dataset && t.dataset.optadd != null) {
     const i = +t.dataset.optadd;
     if (e.key === 'Enter' || (e.key === 'Tab' && t.value.trim())) { if (t.value.trim()) { e.preventDefault(); optAddValues(i, t.value); } else if (e.key === 'Enter') e.preventDefault(); }
@@ -3476,11 +3535,48 @@ function openEditor(id, preset) {
   if (isGoods(EDIT)) loadVariants(EDIT, src);
   drawEditor();
 }
+/* Master set: which set, what kind of set, and the cards it doesn't have. */
+function setSectionHTML(it, regionLangs) {
+  return `<div class="fs"><h3>Set <small>what it is, and what's missing</small></h3>
+    <label class="field"><span>Name</span><input class="in" id="f_name" data-f="name" value="${esc(it.name)}" placeholder="${esc(KIND.set.name)}"></label>
+    <div class="grid">
+      <label class="field"><span>Set</span><input class="in" data-f="setName" list="msSetList" value="${esc(it.setName)}" placeholder="Scarlet & Violet 151"><datalist id="msSetList"></datalist></label>
+      <label class="field"><span>Kind of set</span>${selectHTML('f_settype', SET_TYPES, it.setType || 'Master set', 'data-f="setType"')}</label>
+      <label class="field"><span>Cards in it</span><input class="in" data-setcount="1" inputmode="numeric" value="${it.setCount ?? ''}" placeholder="Optional"></label>
+      <label class="field"><span>Region</span>${selectHTML('f_region', POKEMON.regions.map(r => [r.id, r.label]), it.region, 'data-f="region"')}</label>
+      <label class="field"><span>Language</span>${selectHTML('f_lang', regionLangs.map(l => [l, POKEMON.languages[l]]), it.language, 'data-f="language"')}</label>
+      <label class="field"><span>Condition</span>${selectHTML('f_setcond', POKEMON.conditions.map(c => [c.id, c.label || c.id]), it.condition, 'data-f="condition"')}</label>
+    </div>
+    <div class="field"><span>Missing</span><div class="chips-in" id="msChips">${missChipsHTML(it)}</div><small>Type a card it doesn't have, then Enter. Leave empty if it's complete.</small></div>
+    ${(setTimeout(() => loadSetList().then(sets => { const dl = $('#msSetList'); if (dl) dl.innerHTML = sets.map(x => `<option value="${esc(x.name)}"></option>`).join(''); }), 0), '')}
+    <div class="ms-est" id="msEst">${it.setName ? '<button type="button" class="btn sm" data-act="ms-est">Estimate value from TCGplayer</button>' : ''}</div>
+  </div>`;
+}
+function missChipsHTML(it) {
+  return (it.missing || []).map((m, j) => `<span class="chip-v">${esc(m)}<button type="button" data-missrm="${j}" aria-label="Remove ${esc(m)}">${icon('x')}</button></span>`).join('') + `<input id="msAdd" data-missadd="1" autocomplete="off" placeholder="${(it.missing || []).length ? 'Add another' : 'Professor Program Voltorbs'}" aria-label="Add a missing card">`;
+}
+function missAdd(text) {
+  const vals = String(text).split(/[,\n]/).map(v => v.trim()).filter(Boolean);
+  for (const v of vals) if (!EDIT.missing.some(x => x.toLowerCase() === v.toLowerCase())) EDIT.missing.push(v);
+  redrawMiss();
+}
+function redrawMiss() { const el = $('#msChips'); if (!el) return; el.innerHTML = missChipsHTML(EDIT); const n = $('#msAdd'); n && n.focus(); }
+/* Every card and printing in the set at TCGplayer market, as a starting point for the set's value. */
+async function msEstimate() {
+  const box = $('#msEst'), it = EDIT; if (!box || !it || !it.setName.trim()) return;
+  box.innerHTML = '<span class="note">Adding up the set…</span>';
+  let r; try { r = await tcgApi('/api/setvalue?q=' + encodeURIComponent(it.setName.trim()) + '&lang=' + (it.region === 'jp' ? 'ja' : 'en')); } catch { r = null; }
+  const sets = (r && r.sets) || [];
+  if (!sets.length) { box.innerHTML = `<span class="note">No TCGplayer prices for “${esc(it.setName)}” yet. Check the set name, or set the market by hand.</span>`; return; }
+  box.innerHTML = sets.map((x, i) => `<div class="ms-row${i ? ' alt' : ''}"><div><b>${esc(x.name)}</b><small>${x.cards} cards · ${x.printings} printings${x.unpriced ? ` · ${x.unpriced} unpriced` : ''}</small></div><b class="ms-val">${fmt(x.cents, { whole: true })}</b><button type="button" class="btn sm" data-msuse="${x.cents}" data-msname="${esc(x.name)}">Use</button></div>`).join('')
+    + `<small class="faint">Every card and printing in the set at TCGplayer market. Grand master extras (promos, stamps) aren't included. Take off what's missing.</small>`;
+}
 function drawEditor() {
   const it = EDIT, isNew = !it.id, st = S.settings;
   const kind = KIND[it.kind] || KIND.single;
-  const card = it.kind === 'single', sealed = it.kind === 'sealed', goods = isGoods(it);
+  const card = it.kind === 'single', sealed = it.kind === 'sealed', goods = isGoods(it), mset = isSet(it);
   if (goods && !it._vars) loadVariants(it, null);
+  if (mset && !Array.isArray(it.missing)) it.missing = [];
   const g = it.grading || { company: 'PSA', grade: '10', special: '', qualifier: '', cert: '', sub: null };
   const gr = GRADER[g.company] || GRADER.Other;
   const regionLangs = (POKEMON.regions.find(r => r.id === it.region) || POKEMON.regions[0]).languages;
@@ -3491,7 +3587,7 @@ function drawEditor() {
   openDrawer(`
     <div class="drawer-head">${!isNew && itemImg(it) ? imgTag(itemImgs(it, 'high'), 'ed-headimg') : ''}<div style="flex:1;min-width:0"><h2>${title}</h2>${isNew ? '' : `<div class="note" style="margin-top:2px">${metaLine(it)}</div>`}</div><button class="icon-btn" data-act="close-drawer" aria-label="Close">${icon('x')}</button></div>
     <div class="drawer-body" id="edBody">
-      ${isNew ? `<div class="fs" style="padding-bottom:16px"><div class="seg" id="edKind" role="group" aria-label="What is it">${ITEM_KINDS.map(k => `<button data-kind="${k.id}" aria-pressed="${it.kind === k.id}">${k.label}</button>`).join('')}</div></div>` : ''}
+      ${isNew || !goods ? `<div class="fs" style="padding-bottom:16px"><div class="seg" id="edKind" role="group" aria-label="What is it">${ITEM_KINDS.filter(k => isNew || !['accessory', 'art', 'other'].includes(k.id)).map(k => `<button data-kind="${k.id}" aria-pressed="${it.kind === k.id}">${k.label}</button>`).join('')}</div>${isNew ? '' : '<small class="faint">Added as the wrong kind? Switch it here.</small>'}</div>` : ''}
 
       ${goods ? `<div class="fs"><h3>Item</h3>
         <label class="field"><span>Name</span><input class="in" id="f_name" data-f="name" value="${esc(it.name)}" placeholder="${esc(kind.name)}"></label>
@@ -3501,7 +3597,7 @@ function drawEditor() {
         </div>
         <label class="field"><span>Description</span><input class="in" data-f="description" value="${esc(it.description)}" placeholder="What a buyer should know"></label>
       </div>
-      ${goodsSectionsHTML()}` : `<div class="fs"><h3>${sealed ? 'Product' : 'Card'} <small>${sealed ? 'set and product type' : 'the printing: set + number'}</small></h3>
+      ${goodsSectionsHTML()}` : mset ? setSectionHTML(it, regionLangs) : `<div class="fs"><h3>${sealed ? 'Product' : 'Card'} <small>${sealed ? 'set and product type' : 'the printing: set + number'}</small></h3>
         ${card ? editorLookupHTML() : ''}
         ${card && it.ext && it.ext.tcgdex ? `<div class="ed-card"><div class="note">${it.ext && it.ext.tcgdex ? 'Matched to the card database' + (it.tcgPrices ? `. TCGplayer market: ${[['Normal', it.tcgPrices.normal], ['Holo', it.tcgPrices.holo], ['Reverse', it.tcgPrices.reverse], ['1st Ed', it.tcgPrices.first]].filter(x => x[1] != null).map(x => x[0] + ' ' + fmt(x[1])).join(' · ')}` : '. No US market price listed.') : ''}</div></div>` : ''}
         ${card && it.ext && it.ext.tcgdex ? `<details class="ed-more"><summary>Card details</summary><div class="ed-more-body">` : ''}
@@ -3550,7 +3646,7 @@ function drawEditor() {
           <label class="field"><span>Cost each</span>${moneyIn('f_cost', it.costCents, 'data-m="costCents"')}</label>
           <label class="field"><span>${it.kind === 'art' ? 'Made or bought from' : 'Acquired from'}</span><input class="in" data-f="acquiredFrom" value="${esc(it.acquiredFrom)}"></label>
           <label class="field"><span>Acquired on</span><input class="in" type="date" data-f="acquiredAt" value="${esc(it.acquiredAt)}"></label>
-          <label class="field"><span>Binder or case</span>${selectHTML('f_loc', [['', 'No binder'], ...(S.settings.locations || []).map(l => [l.name, l.name]), ...(it.location && !locByName(it.location) ? [[it.location, it.location]] : []), ['@new', 'New binder or case…']], locByName(it.location) ? locByName(it.location).name : it.location, 'data-f="location"')}<small id="edLocHint">${esc(locShopperText(locOf(it)))}</small></label>
+          <label class="field"><span>${card ? 'Binder or case' : 'Where it lives'}</span>${selectHTML('f_loc', [['', card ? 'No binder' : 'Nowhere yet'], ...locChoices(it).map(l => [l.name, l.name + (locForCards(l) === card ? '' : card ? ' (shelf)' : ' (binder)')]), ...(it.location && !locByName(it.location) ? [[it.location, it.location]] : []), ['@new', card ? 'New binder or case…' : 'New shelf…']], locByName(it.location) ? locByName(it.location).name : it.location, 'data-f="location"')}<small id="edLocHint">${esc(locShopperText(locOf(it)))}</small></label>
           ${goods ? '' : `<label class="field"><span>SKU / label</span><input class="in mono" data-f="sku" value="${esc(it.sku)}"></label>`}
         </div>
         <label class="field"><span>Notes</span><input class="in" data-f="notes" value="${esc(it.notes)}"></label>
@@ -3619,8 +3715,11 @@ function edInput(e) {
   if (t.dataset.vf) { const v = it._vars[+t.dataset.vi]; if (!v) return; v[t.dataset.vf] = t.dataset.vf === 'price' ? toCents(t.value) : t.value; if (t.dataset.vf === 'qty') { const c = $('#varCount'); if (c) c.textContent = varCountText(); } return; }
   if (t.dataset.optn != null) { it.opts[+t.dataset.optn].name = t.value; if (e.type === 'change') { rebuildVariants(); redrawRows(); } return; }
   if (t.dataset.optadd != null) { if (/[,\n]/.test(t.value)) { optAddValues(+t.dataset.optadd, t.value); } return; }
+  if (t.dataset.missadd != null) { if (/[,\n]/.test(t.value)) missAdd(t.value); return; }
+  if (t.dataset.setcount != null) { const n = parseInt(t.value, 10); it.setCount = n > 0 ? n : null; return; }
+  if (t.dataset.f === 'setName' && isSet(it) && e.type === 'change') { it.setName = t.value; const b = $('#msEst'); if (b && !b.querySelector('.ms-row')) b.innerHTML = it.setName.trim() ? '<button type="button" class="btn sm" data-act="ms-est">Estimate value from TCGplayer</button>' : ''; return; }
   if (t.dataset.f === 'location') {
-    if (t.value === '@new') { t.value = it.location || ''; ED_RETURN = true; return openBinderModal(); }
+    if (t.value === '@new') { t.value = it.location || ''; ED_RETURN = true; return openBinderModal(null, { type: isSingle(it) ? 'binder' : 'shelf' }); }
     it.location = t.value; const h = $('#edLocHint'); if (h) h.textContent = locShopperText(locOf(it)); return;
   }
   if (t.id === 'edQ') { if (e.type === 'input') edLookupInput(t.value); return; }
@@ -3791,9 +3890,9 @@ function invTabs() {
   const n = liveItems().length, b = (S.settings.locations || []).length, inBinder = INV.mode === 'binders' || !!INV.loc;
   return `<nav class="inv-tabs" role="tablist" aria-label="Inventory views">
     <button role="tab" data-invmode="list" aria-selected="${!inBinder}">Items<span>${n.toLocaleString()}</span></button>
-    <button role="tab" data-invmode="binders" aria-selected="${inBinder}">Binders &amp; cases<span>${b}</span></button></nav>`;
+    <button role="tab" data-invmode="binders" aria-selected="${inBinder}">Binders &amp; shelves<span>${b}</span></button></nav>`;
 }
-const LOC_ICON = { binder: 'binder', case: 'casebox', box: 'box', other: 'pin' };
+const LOC_ICON = { binder: 'binder', case: 'casebox', box: 'box', shelf: 'shelf', other: 'pin' };
 const LOC_SEEN = { show: 'On the table', ask: 'Behind the table', hide: 'Hidden' };
 function binderStats(l) {
   const f = locFill(l); let val = 0;
@@ -3810,36 +3909,36 @@ function binderCardHTML(l) {
     <div class="bn-top"><span class="bn-ic">${icon(LOC_ICON[l.type] || 'pin')}</span>
       <div class="bn-title"><b>${esc(l.name)}</b><small title="${o ? 'When it’s full, extra cards go to ' + esc(o.name) : ''}">${l.minPrice > 0 || o ? [l.minPrice > 0 ? fmt(l.minPrice, { whole: l.minPrice % 100 === 0 }) + '+ cards' : typeName(l), o ? '→ ' + esc(o.name) : ''].filter(Boolean).join(' ') : typeName(l)}</small></div>
       <button class="icon-btn bn-edit" data-binedit="${l.id}" aria-label="Edit ${esc(l.name)}" title="Edit">${icon('edit')}</button></div>
-    <div class="bn-count"><b>${f.n.toLocaleString()}</b>${f.cap ? `<span>/ ${f.cap.toLocaleString()}</span>` : '<span>cards</span>'}<em class="bn-state">${state}</em></div>
+    <div class="bn-count"><b>${f.n.toLocaleString()}</b>${f.cap ? `<span>/ ${f.cap.toLocaleString()}</span>` : `<span>${locNoun(l, f.n)}</span>`}<em class="bn-state">${state}</em></div>
     <div class="bn-bar${f.cap ? '' : ' none'}"><i style="width:${f.cap ? Math.min(100, f.pct).toFixed(1) : 0}%"></i></div>
     <div class="bn-foot"><span class="bn-val">${val ? fmt(val, { whole: true }) : '$0'} <small>at sticker</small></span>
-      ${CF_TARGET === 'booth' ? `<button class="bn-add" data-binadd="${l.id}" aria-label="Add cards to ${esc(l.name)}" title="Add cards here">${icon('plus')}</button>` : ''}</div>
+      ${CF_TARGET === 'booth' && locForCards(l) ? `<button class="bn-add" data-binadd="${l.id}" aria-label="Add cards to ${esc(l.name)}" title="Add cards here">${icon('plus')}</button>` : ''}</div>
   </article>`;
 }
 /* Inside one binder: what's in it, how full, and what to do next. */
 function binderHeadHTML() {
   if (INV.loc === '-') {
     const n = liveItems().filter(it => !it.sample && !String(it.location || '').trim()).reduce((a, it) => a + Math.max(0, onHand(it.id)), 0);
-    return `<div class="card bn-head"><button class="bn-back" data-invmode="binders">${icon('back')}All binders &amp; cases</button>
+    return `<div class="card bn-head"><button class="bn-back" data-invmode="binders">${icon('back')}All binders &amp; shelves</button>
       <div class="bnh-main"><span class="bn-ic">${icon('pin')}</span><div class="bnh-title"><h2>No binder yet</h2><small>${n.toLocaleString()} card${n === 1 ? '' : 's'} waiting for a home</small></div>
       <div class="bnh-actions"><button class="btn primary" data-act="bin-place">Place them</button></div></div></div>`;
   }
   const l = (S.settings.locations || []).find(x => locKey(x.name) === INV.loc);
   if (!l) return '';
   const { f, val, z, state } = binderStats(l), o = locById(l.overflow), plan = restockPlans().findIndex(p => p.to.id === l.id);
-  return `<div class="card bn-head" data-z="${z}"><button class="bn-back" data-invmode="binders">${icon('back')}All binders &amp; cases</button>
+  return `<div class="card bn-head" data-z="${z}"><button class="bn-back" data-invmode="binders">${icon('back')}All binders &amp; shelves</button>
     <div class="bnh-main"><span class="bn-ic">${icon(LOC_ICON[l.type] || 'pin')}</span>
       <div class="bnh-title"><h2>${esc(l.name)}</h2><small>${[typeName(l), LOC_SEEN[l.show] || LOC_SEEN.show, l.minPrice > 0 ? fmt(l.minPrice, { whole: true }) + '+ cards' : '', o ? 'extra goes to ' + esc(o.name) : ''].filter(Boolean).join(' · ')}</small></div>
-      <div class="bnh-stat"><b>${f.n.toLocaleString()}</b><span>${f.cap ? '/ ' + f.cap.toLocaleString() + ' cards' : 'cards'}</span><em class="bn-state">${state}</em></div>
+      <div class="bnh-stat"><b>${f.n.toLocaleString()}</b><span>${f.cap ? '/ ' + f.cap.toLocaleString() + ' ' + locNoun(l, 2) : locNoun(l, f.n)}</span><em class="bn-state">${state}</em></div>
       <div class="bnh-stat"><b>${fmt(val, { whole: true })}</b><span>at sticker</span></div>
-      <div class="bnh-actions"><button class="btn" data-binedit="${l.id}">${icon('edit')}Edit</button><button class="btn" data-movefrom="${esc(l.name)}">${icon('swap')}Move cards</button>${plan >= 0 ? `<button class="btn" data-restock="${plan}">${icon('swap')}Restock</button>` : ''}${CF_TARGET === 'booth' ? `<button class="btn primary" data-binadd="${l.id}">${icon('plus')}Add cards here</button>` : ''}</div></div>
+      <div class="bnh-actions"><button class="btn" data-binedit="${l.id}">${icon('edit')}Edit</button><button class="btn" data-movefrom="${esc(l.name)}">${icon('swap')}Move ${locForCards(l) ? 'cards' : 'items'}</button>${plan >= 0 ? `<button class="btn" data-restock="${plan}">${icon('swap')}Restock</button>` : ''}${CF_TARGET === 'booth' ? locForCards(l) ? `<button class="btn primary" data-binadd="${l.id}">${icon('plus')}Add cards here</button>` : `<button class="btn primary" data-act="new-item" data-newloc="${esc(l.name)}">${icon('plus')}Add stock here</button>` : ''}</div></div>
     ${f.cap ? `<div class="bn-bar"><i style="width:${Math.min(100, f.pct).toFixed(1)}%"></i></div>` : ''}</div>`;
 }
 /* ---------- move cards between binders: pick the cards, pick where they go ---------- */
 const MV = { from: '', to: '', q: '', pick: new Map() };
 function openMoveCards(from) {
   const locs = S.settings.locations || [];
-  if (!locs.length) { toast('Add a binder or case first.', 'error'); return; }
+  if (!locs.length) { toast('Add a binder, case or shelf first.', 'error'); return; }
   MV.from = from != null ? from : (INV.loc && INV.loc !== '-' ? (locs.find(l => locKey(l.name) === INV.loc) || {}).name || '' : (INV.loc === '-' ? '-' : '')); MV.q = ''; MV.pick = new Map();
   MV.to = (locs.find(l => l.name !== MV.from) || locs[0]).name;
   openModal(`<div class="pad mv-pad">
@@ -3898,7 +3997,7 @@ function restockPlans() {
   for (const c of (S.settings.locations || [])) {
     const o = locById(c.overflow); if (!o || !(c.cap > 0)) continue;
     const room = locFill(c).room; if (room <= 0) continue;
-    const pool = liveItems().filter(it => !it.sample && locKey(it.location) === locKey(o.name) && onHand(it.id) > 0 && (!(c.minPrice > 0) || (it.priceCents ?? 0) >= c.minPrice))
+    const pool = liveItems().filter(it => !it.sample && isSingle(it) && locKey(it.location) === locKey(o.name) && onHand(it.id) > 0 && (!(c.minPrice > 0) || (it.priceCents ?? 0) >= c.minPrice))
       .sort((a, b) => (b.priceCents || 0) - (a.priceCents || 0));
     const waiting = pool.reduce((a, it) => a + onHand(it.id), 0);
     if (waiting) plans.push({ to: c, from: o, room, waiting, pool });
@@ -3912,7 +4011,7 @@ function spillPlans() {
 function spillRun(id) {
   const p = spillPlans().find(x => x.from.id === id); if (!p) return;
   let left = p.extra, moved = 0;
-  const pool = liveItems().filter(it => !it.sample && locKey(it.location) === locKey(p.from.name) && onHand(it.id) > 0).sort((a, b) => (a.priceCents ?? 0) - (b.priceCents ?? 0));
+  const pool = liveItems().filter(it => !it.sample && isSingle(it) && locKey(it.location) === locKey(p.from.name) && onHand(it.id) > 0).sort((a, b) => (a.priceCents ?? 0) - (b.priceCents ?? 0));
   for (const it of pool) { if (left <= 0) break; const k = Math.min(left, onHand(it.id)); moveUnits(it, k, p.to.name); left -= k; moved += k; }
   syncLocations(); toast(`Moved ${moved} to ${p.to.name}`); scheduleRender();
 }
@@ -3925,39 +4024,40 @@ function restockHTML() {
 }
 function renderBinders(root) {
   const st = S.settings, locs = st.locations || [];
-  const unN = liveItems().filter(it => !it.sample && !String(it.location || '').trim()).reduce((a, it) => a + Math.max(0, onHand(it.id)), 0);
+  const unN = liveItems().filter(it => !it.sample && isSingle(it) && !String(it.location || '').trim()).reduce((a, it) => a + Math.max(0, onHand(it.id)), 0);
   const placed = locs.reduce((a, l) => a + locCount(l.name), 0);
   const alerts = restockHTML() + (unN ? `<div class="bn-alert"><span class="ba-ic">${icon('pin')}</span>
     <div class="ba-txt"><b>${unN.toLocaleString()} card${unN === 1 ? ' has' : 's have'} no binder</b><small>Place by price rules or into one binder</small></div>
     <div class="ba-act"><button class="btn sm" data-act="bin-unplaced">View</button><button class="btn sm primary" data-act="bin-place">Place them</button></div></div>` : '');
   const groups = ['show', 'ask', 'hide'].map(k => ({ k, list: locs.filter(l => (l.show || 'show') === k) })).filter(g => g.list.length);
-  const addTile = `<button class="bn bn-new" data-act="bin-new">${icon('plus')}<b>Add a binder or case</b></button>`;
+  const addTile = `<button class="bn bn-new" data-act="bin-new">${icon('plus')}<b>Add a binder, case or shelf</b></button>`;
   root.innerHTML = `
-    <div class="page-head"><div><h1>Inventory</h1><div class="sub">${placed.toLocaleString()} cards in ${locs.length} binder${locs.length === 1 ? '' : 's'} &amp; case${locs.length === 1 ? '' : 's'}</div></div>
-      <div class="actions"><button class="btn" data-act="bin-new">${icon('plus')}Add a binder or case</button>${CF_TARGET === 'booth' ? `<button class="btn primary" data-act="quick-add">${icon('search')}Add cards</button>` : ''}</div></div>
+    <div class="page-head"><div><h1>Inventory</h1><div class="sub">${placed.toLocaleString()} in stock across ${locs.length} binder${locs.length === 1 ? '' : 's'}, case${locs.length === 1 ? '' : 's'} &amp; shel${locs.length === 1 ? 'f' : 'ves'}</div></div>
+      <div class="actions"><button class="btn" data-act="bin-new">${icon('plus')}Add a binder, case or shelf</button>${CF_TARGET === 'booth' ? `<button class="btn primary" data-act="quick-add">${icon('search')}Add cards</button>` : ''}</div></div>
     ${invTabs()}
     ${alerts ? `<div class="bn-alerts">${alerts}</div>` : ''}
-    ${groups.length ? groups.map((g, gi) => `<section class="bn-sec"><header><h3>${LOC_SEEN[g.k]}</h3><span>${g.list.length} · ${g.list.reduce((a, l) => a + locCount(l.name), 0).toLocaleString()} cards</span></header>
+    ${groups.length ? groups.map((g, gi) => `<section class="bn-sec"><header><h3>${LOC_SEEN[g.k]}</h3><span>${g.list.length} · ${g.list.reduce((a, l) => a + locCount(l.name), 0).toLocaleString()} in stock</span></header>
       <div class="bn-grid">${g.list.map(binderCardHTML).join('')}${gi === groups.length - 1 ? addTile : ''}</div></section>`).join('')
-      : `<div class="card bn-empty">${icon('binder')}<h3>Where do your cards live?</h3><p>Add your binders and cases.</p><button class="btn primary" data-act="bin-new">${icon('plus')}Add your first binder or case</button></div>`}`;
+      : `<div class="card bn-empty">${icon('binder')}<h3>Where does your stock live?</h3><p>Binders and cases for cards, shelves for sealed, sets and goods.</p><button class="btn primary" data-act="bin-new">${icon('plus')}Add your first binder, case or shelf</button></div>`}`;
 }
 /* Add or edit a binder / case. */
 let ED_RETURN = false;
-function openBinderModal(id) {
+function openBinderModal(id, opts = {}) {
   const l = id ? locById(id) : null, st = S.settings, others = (st.locations || []).filter(x => x.id !== id);
-  const n = l ? locCount(l.name) : 0, type = l ? l.type || 'binder' : 'binder';
-  openModal(modalShell(l ? 'Edit ' + esc(l.name) : 'New binder or case', `
-    <div class="bm-row"><label class="field" style="flex:1"><span>Name</span><input class="in" id="bnName" value="${esc(l ? l.name : '')}" placeholder="Midrange Binder, Case 1…" autocomplete="off"></label>
+  const n = l ? locCount(l.name) : 0, type = l ? l.type || 'binder' : opts.type || 'binder';
+  const inside = l ? liveItems().some(it => !it.sample && locKey(it.location) === locKey(l.name) && onHand(it.id) > 0) : false;
+  openModal(modalShell(l ? 'Edit ' + esc(l.name) : 'New binder, case or shelf', `
+    <div class="bm-row"><label class="field" style="flex:1"><span>Name</span><input class="in" id="bnName" value="${esc(l ? l.name : '')}" placeholder="Midrange Binder, Case 1, Shelf stock…" autocomplete="off"></label>
       <label class="field bm-cap"><span>Holds</span><input class="in" id="bnCap" inputmode="numeric" value="${l && l.cap > 0 ? l.cap : ''}" placeholder="No limit"></label></div>
     <div class="seg bm-type" id="bnType" role="group" aria-label="Type">${LOC_TYPES.map(([k, t]) => `<button data-k="${k}" aria-pressed="${type === k}">${icon(LOC_ICON[k])}${t}</button>`).join('')}</div>
     <fieldset class="bm-opt"><legend>Shoppers see</legend><div class="bm-radios">${[['show', 'Location', 'On the table'], ['ask', 'Location + “Ask me”', 'Behind the table'], ['hide', 'Nothing', 'Hidden']].map(([k, t, d]) => `<label class="bm-radio"><input type="radio" name="bnShow" value="${k}"${(l ? l.show : 'show') === k ? ' checked' : ''}><span><b>${t}</b><small>${d}</small></span></label>`).join('')}</div></fieldset>
-    <fieldset class="bm-opt bm-rule"><legend>Price rule</legend>
+    <fieldset class="bm-opt bm-rule"${locForCards({ type }) ? '' : ' hidden'}><legend>Price rule</legend>
       <label class="check"><input type="checkbox" id="bnRule"${l && l.minPrice > 0 ? ' checked' : ''}> Cards priced ${moneyIn('bnMin', l && l.minPrice > 0 ? l.minPrice : 1500, 'style="width:84px;height:32px;display:inline-block"')} and up go here</label>
       <label class="field"><span>Overflow to</span>${selectHTML('bnOver', [['', 'None (just warn)'], ...others.map(x => [x.id, x.name])], l ? l.overflow || '' : '')}</label></fieldset>
-    ${l ? `<p class="note">${n.toLocaleString()} card${n === 1 ? '' : 's'} inside.</p>` : `<p class="note bm-tip" ${type === 'case' ? '' : 'hidden'}>Tip: $15 rule on each case, extras to overflow.</p>`}`,
-    `${l ? `<button class="btn danger" data-act="bin-del" ${n ? 'disabled title="Move its cards first"' : ''}>Remove</button><span class="spacer"></span>` : ''}<button class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" data-act="bin-save">${l ? 'Save' : 'Add'}</button>`), m => {
+    ${l ? `<p class="note">${n.toLocaleString()} ${locNoun(l, n)} inside.</p>` : `<p class="note bm-tip" ${type === 'case' ? '' : 'hidden'}>Tip: $15 rule on each case, extras to overflow.</p>`}`,
+    `${l ? `<button class="btn danger" data-act="bin-del" ${inside ? 'disabled title="Move what’s in it first"' : ''}>Remove</button><span class="spacer"></span>` : ''}<button class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" data-act="bin-save">${l ? 'Save' : 'Add'}</button>`), m => {
     m.dataset.id = id || ''; m.dataset.type = type; m.classList.add('bm');
-    $('#bnType').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; m.dataset.type = b.dataset.k; $$('#bnType button').forEach(x => x.setAttribute('aria-pressed', x === b)); const t = m.querySelector('.bm-tip'); if (t) t.hidden = b.dataset.k !== 'case'; if (b.dataset.k === 'case' && !$('#bnCap').value) $('#bnCap').value = '100'; });
+    $('#bnType').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; m.dataset.type = b.dataset.k; $$('#bnType button').forEach(x => x.setAttribute('aria-pressed', x === b)); const t = m.querySelector('.bm-tip'); if (t) t.hidden = b.dataset.k !== 'case'; if (b.dataset.k === 'case' && !$('#bnCap').value) $('#bnCap').value = '100'; const r = m.querySelector('.bm-rule'); if (r) r.hidden = !locForCards({ type: b.dataset.k }); });
     setTimeout(() => $('#bnName').focus(), 30);
   });
 }
@@ -3967,7 +4067,7 @@ function saveBinder() {
   const clash = (S.settings.locations || []).find(x => x.id !== id && locKey(x.name) === locKey(name));
   if (clash) { toast('“' + clash.name + '” already exists.', 'error'); return; }
   const cap = parseInt($('#bnCap').value, 10);
-  const rec = { name, type: m.dataset.type || 'binder', cap: cap > 0 ? cap : null, show: (m.querySelector('input[name=bnShow]:checked') || {}).value || 'show', minPrice: $('#bnRule').checked ? toCents($('#bnMin').value) : null, overflow: $('#bnOver').value || null };
+  const rec = { name, type: m.dataset.type || 'binder', cap: cap > 0 ? cap : null, show: (m.querySelector('input[name=bnShow]:checked') || {}).value || 'show', minPrice: $('#bnRule').checked && locForCards({ type: m.dataset.type }) ? toCents($('#bnMin').value) : null, overflow: $('#bnOver').value || null };
   const old = id ? locById(id) : null;
   saveSettings(s => {
     s.locations = s.locations || [];
@@ -4020,16 +4120,16 @@ function restockDone() {
 /* Place every card that has no binder: by price rules, the rest in one binder. */
 function openPlaceUnplaced() {
   const locs = S.settings.locations || [];
-  if (!locs.length) { toast('Add a binder or case first.', 'error'); return openBinderModal(); }
+  if (!locs.length) { toast('Add a binder, case or shelf first.', 'error'); return openBinderModal(); }
   openModal(modalShell('Place cards with no binder', `
     ${hasPriceRules() ? `<label class="check"><input type="checkbox" id="plRules" checked> Use price rules first</label>` : ''}
-    <label class="field"><span>${hasPriceRules() ? 'Everything else to' : 'Put them in'}</span>${selectHTML('plElse', [['', 'Leave them unplaced'], ...locs.map(l => [l.name, l.name + ' · ' + locFillText(l)])], (locs.find(l => !(l.minPrice > 0)) || {}).name || '')}</label>
+    <label class="field"><span>${hasPriceRules() ? 'Everything else to' : 'Put them in'}</span>${selectHTML('plElse', [['', 'Leave them unplaced'], ...locs.filter(locForCards).map(l => [l.name, l.name + ' · ' + locFillText(l)])], (locs.filter(locForCards).find(l => !(l.minPrice > 0)) || {}).name || '')}</label>
     `,
     `<button class="btn ghost" data-act="close-modal">Cancel</button><button class="btn primary" data-act="place-run">Place them</button>`));
 }
 function placeUnplaced() {
   const useRules = !!($('#plRules') && $('#plRules').checked), elseName = $('#plElse').value;
-  const items = liveItems().filter(it => !it.sample && !String(it.location || '').trim() && onHand(it.id) > 0).sort((a, b) => (b.priceCents || 0) - (a.priceCents || 0));
+  const items = liveItems().filter(it => !it.sample && isSingle(it) && !String(it.location || '').trim() && onHand(it.id) > 0).sort((a, b) => (b.priceCents || 0) - (a.priceCents || 0));
   let n = 0;
   for (const it of items) {
     const to = useRules ? autoPlace(it.priceCents, elseName, onHand(it.id)) : elseName;
@@ -4364,9 +4464,9 @@ VIEWS.setup = function () {
           <button class="icon-btn" data-qkdel="${i}" aria-label="Remove bin">${icon('x')}</button></div>`; }).join('')}
         <div class="note">Blank “each” = bundles only.</div>
         <div><button class="btn sm" data-act="qk-add">${icon('plus')}Add bin</button></div>`)}
-      ${sec('Binders & cases', 'Manage in Inventory → Binders & cases.', `
+      ${sec('Binders & shelves', 'Manage in Inventory → Binders & shelves.', `
         ${(st.locations || []).length ? `<div class="loc-sum">${st.locations.map(l => `<div><span class="loc-ic">${icon(LOC_ICON[l.type] || 'pin')}</span><b>${esc(l.name)}</b><span class="note">${locFillText(l)}${l.minPrice > 0 ? ' · ' + fmt(l.minPrice, { whole: true }) + '+ cards' : ''}${l.show === 'ask' ? ' · ask me' : l.show === 'hide' ? ' · hidden' : ''}</span></div>`).join('')}</div>` : '<div class="note">None yet.</div>'}
-        <div><button class="btn sm" data-act="go-binders">${icon('binder')}Manage binders &amp; cases</button></div>`)}
+        <div><button class="btn sm" data-act="go-binders">${icon('binder')}Manage binders &amp; shelves</button></div>`)}
       ${sec('Storefront', 'What shoppers see. Never costs or market prices.', `
         <label class="check"><input type="checkbox" id="sf_on" data-sf="on"${st.storefront.on ? ' checked' : ''}> Keep the storefront updated while I sell</label>
         <div class="note">${CF_TARGET !== 'artifact' && !HOST.server ? '<b>No server.</b> Export storefront.json and upload it. ' : ''}${SHOP.lastPub ? 'Last updated ' + timeAgo(SHOP.lastPub) + '. ' : 'Not published yet. '}${CF_TARGET === 'artifact' ? (st.storefront.on ? 'Updates between sales.' : '') : HOST.server ? (st.storefront.on ? 'Updates after each sale.' : '') : ''}${SHOP.status ? ` <b style="color:var(--stretch)">${esc(SHOP.status)}</b>` : ''}</div>
@@ -4634,7 +4734,8 @@ function shopSnapshot({ includeSamples = false } = {}) {
       e: it.kind === 'single' ? [it.edition && editionLabel(it.edition), it.stamp && (it.stamp === 'Other' ? it.stampNote || 'Stamped' : it.stamp + ' stamp')].filter(Boolean).join(' · ') : '',
       g: it.grading ? gradeLabel(it.grading) : '',
       c: it.kind === 'single' && !it.grading ? it.condition : '',
-      st: it.kind === 'sealed' ? it.sealedType || '' : '',
+      st: it.kind === 'sealed' ? it.sealedType || '' : isSet(it) ? it.setType || 'Master set' : '',
+      ms: isSet(it) ? ((it.missing || []).length ? 'Missing ' + it.missing.join(', ') : 'Complete').slice(0, 200) : '',
       ca: goods ? it.category || '' : '', va: goods ? it.variant || '' : '', mk: goods ? it.maker || '' : '',
       gp: goods && it.group ? it.group.slice(-12) : '', ds: goods ? (it.description || '').slice(0, 200) : '',
       ph: [it.photo, ...(it.photos || [])].find(u => u && PHOTO_URL_RE.test(u)) || '',
@@ -4705,7 +4806,7 @@ function shopTick() {
 }
 
 /* ---------- shopper view ---------- */
-function shopHay(x) { return [x.n, x.s, x.no, x.r, x.lg, x.f, x.e, x.g, x.c, x.st, x.ca, x.va, x.mk, x.lo, KIND[x.k] && KIND[x.k].label].join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function shopHay(x) { return [x.n, x.s, x.no, x.r, x.lg, x.f, x.e, x.g, x.c, x.st, x.ms, x.ca, x.va, x.mk, x.lo, KIND[x.k] && KIND[x.k].label].join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 /* Stickers, accessories and art: variants of one product shown together, in a quiet side panel. */
 function shopProducts(list) {
   const m = new Map();
@@ -4730,6 +4831,7 @@ function shopRows() {
     if (SHOP.type === 'cards' && x.k !== 'single') return false;
     if (SHOP.type === 'graded' && !x.g) return false;
     if (SHOP.type === 'sealed' && x.k !== 'sealed') return false;
+    if (SHOP.type === 'sets' && x.k !== 'set') return false;
     if (SHOP.type === 'goods' && !['accessory', 'art', 'other'].includes(x.k)) return false;
     if (SHOP.loc && (x.lo || '') !== SHOP.loc) return false;
     if (!toks.length) return true;
@@ -4742,10 +4844,10 @@ function shopRows() {
 const shopImgs = (x, big) => [x.ph || '', x.im ? x.im + (big ? '/high.webp' : '/low.webp') : '', x.iu ? (big ? x.iu.replace(/_200w\.jpg$/, '_in_1000x1000.jpg') : x.iu) : '', x.ia || ''].filter(Boolean);
 const shopImg = (x, big) => shopImgs(x, big)[0] || '';
 function shopMeta(x) {
-  const meta = ['single', 'sealed'].includes(x.k)
+  const meta = ['single', 'sealed', 'set'].includes(x.k)
     ? [x.st, x.s, x.no && `<span class="mono">${esc(x.no)}</span>`, x.r && `<b>${esc(x.r)}</b>`, x.lg && `<b style="color:var(--stop)">${esc(x.lg)}</b>`]
     : [x.ca, x.va, x.mk && (x.k === 'art' ? 'by ' + x.mk : x.mk)];
-  return meta.filter(Boolean).map(m => m.startsWith && m.startsWith('<') ? m : esc(m)).join(' · ');
+  return meta.filter(Boolean).map(m => m.startsWith && m.startsWith('<') ? m : esc(m)).join(' · ') + (x.ms ? `<div class="si-miss">${esc(x.ms)}</div>` : '');
 }
 function shopTags(x) {
   const tags = [];
@@ -4791,7 +4893,7 @@ function shopZoom(id) {
   const c = el.querySelector('.sz-x'); c && c.focus();
 }
 function shopZoomClose() { const z = document.getElementById('shopZoom'); if (z) { z.remove(); return true; } return false; }
-const SHOP_LOC_ICON = { binder: 'binder', case: 'casebox', box: 'box', other: 'pin' };
+const SHOP_LOC_ICON = { binder: 'binder', case: 'casebox', box: 'box', shelf: 'shelf', other: 'pin' };
 /* Rows grouped by binder / case, in the table's order; ask-me places last, then anything unplaced. */
 function shopGroups(rows) {
   const d = SHOP.data, order = (d.locs || []).map(l => l.n), meta = Object.fromEntries((d.locs || []).map(l => [l.n, l]));
@@ -4836,9 +4938,9 @@ function renderShop() {
   const nItems = d.items.filter(x => !['accessory', 'art', 'other'].includes(x.k)).length + new Set(d.items.filter(x => ['accessory', 'art', 'other'].includes(x.k)).map(x => x.gp || x.i)).size;
   $('#shopSub').innerHTML = `${esc(sh.name || '')}${sh.name ? '<br>' : ''}<span>${nItems} item${nItems === 1 ? '' : 's'} in stock · updated ${timeAgo(d.at)}</span>`;
   $('#shopDeals').innerHTML = d.bins && d.bins.length ? `<div class="shop-deals"><div class="cap">Deal bins at the table</div><div class="sd-row">${d.bins.map(b => `<div class="sd" style="--bin:${b.c};--bin-ink:${b.ink}"><b>${esc(b.h)}</b>${b.l || b.s ? `<small>${esc([b.l, b.s].filter(Boolean).join(' · '))}</small>` : ''}</div>`).join('')}</div></div>` : '';
-  const counts = { cards: 0, graded: 0, sealed: 0, goods: 0 };
-  for (const x of d.items) { if (x.k === 'single') counts.cards++; if (x.g) counts.graded++; if (x.k === 'sealed') counts.sealed++; if (['accessory', 'art', 'other'].includes(x.k)) counts.goods++; }
-  const types = [['all', 'All'], ['cards', 'Cards'], ['graded', 'Graded'], ['sealed', 'Sealed'], ['goods', 'Accessories & art']].filter(([k]) => k === 'all' || counts[k]);
+  const counts = { cards: 0, graded: 0, sealed: 0, sets: 0, goods: 0 };
+  for (const x of d.items) { if (x.k === 'single') counts.cards++; if (x.g) counts.graded++; if (x.k === 'sealed') counts.sealed++; if (x.k === 'set') counts.sets++; if (['accessory', 'art', 'other'].includes(x.k)) counts.goods++; }
+  const types = [['all', 'All'], ['cards', 'Cards'], ['graded', 'Graded'], ['sealed', 'Sealed'], ['sets', 'Master sets'], ['goods', 'Accessories & art']].filter(([k]) => k === 'all' || counts[k]);
   const locs = [...new Set(d.items.map(x => x.lo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (SHOP.loc && !locs.includes(SHOP.loc)) SHOP.loc = '';
   $('#shopFilters').innerHTML = types.map(([k, l]) => `<button class="chip" data-stype="${k}" aria-pressed="${SHOP.type === k}">${l}</button>`).join('') +
@@ -5252,7 +5354,7 @@ function renderQADefaults() {
 }
 /* Which binder new cards go in. Remembered between sessions. */
 function qaLocHTML() {
-  const locs = S.settings.locations || [], rules = hasPriceRules();
+  const locs = (S.settings.locations || []).filter(locForCards), rules = hasPriceRules();
   if (QA.location === '@auto' && !rules) QA.location = '';
   const opts = [...(rules ? [['@auto', 'By price (case rules)']] : []), ...locs.map(l => [l.name, `${l.name} · ${locFillText(l)}`]), ['', 'No binder'], ['@new', 'New binder or case…']];
   const target = QA.location === '@auto' ? QA.locElse : QA.location, warn = target ? locWarning(target) : '';
@@ -5969,7 +6071,7 @@ function onClick(e) {
   if (t.id === 'sheetScrim') return fromBackdrop ? document.body.classList.remove('sheet-open') : undefined;
   if (t.id === 'modalScrim') return fromBackdrop ? closeModal() : undefined;
   if (t.closest && t.closest('a.chk')) return;   // live price links open in a new tab, nothing else
-  const el = t.closest('[data-act],[data-view],[data-nav],[data-addid],[data-addat],[data-setprice],[data-bx],[data-boset],[data-openline],[data-ftype],[data-fstock],[data-peek],[data-quick],[data-rm],[data-q],[data-rmt],[data-tender],[data-bill],[data-undo],[data-edit],[data-sort],[data-invf],[data-srange],[data-void],[data-rcpt-sale],[data-delrcpt],[data-imode],[data-kind],[data-g],[data-qkdel],[data-lcdel],[data-gift],[data-bpadd],[data-invmode],[data-binopen],[data-binadd],[data-binedit],[data-restock],[data-qkcolor],[data-stype],[data-pmode],[data-pickbin],[data-qalang],[data-qacond],[data-qafin],[data-edcond],[data-phdel],[data-optdel],[data-optrm],[data-vdel],[data-spill],[data-movefrom],[data-addcond],[data-qaoc],[data-qaedit],[data-qaundo],[data-qarow],[data-edpick],#showChip,#sync,#drop,#complete');
+  const el = t.closest('[data-act],[data-view],[data-nav],[data-addid],[data-addat],[data-setprice],[data-bx],[data-boset],[data-openline],[data-ftype],[data-fstock],[data-peek],[data-quick],[data-rm],[data-q],[data-rmt],[data-tender],[data-bill],[data-undo],[data-edit],[data-sort],[data-invf],[data-srange],[data-void],[data-rcpt-sale],[data-delrcpt],[data-imode],[data-kind],[data-g],[data-qkdel],[data-lcdel],[data-gift],[data-bpadd],[data-invmode],[data-binopen],[data-binadd],[data-binedit],[data-restock],[data-qkcolor],[data-stype],[data-pmode],[data-pickbin],[data-qalang],[data-qacond],[data-qafin],[data-edcond],[data-phdel],[data-optdel],[data-optrm],[data-missrm],[data-msuse],[data-vdel],[data-spill],[data-movefrom],[data-addcond],[data-qaoc],[data-qaedit],[data-qaundo],[data-qarow],[data-edpick],#showChip,#sync,#drop,#complete');
   if (!el) return;
   const d = el.dataset;
   if (el.id === 'showChip') return go('setup');
@@ -6010,6 +6112,8 @@ function onClick(e) {
   if (d.edcond && inEditor) return edSetCond(d.edcond);
   if (d.phdel != null && inEditor) { EDIT.photos.splice(+d.phdel, 1); return drawEditor(); }
   if (d.optdel != null && inEditor) { EDIT.opts.splice(+d.optdel, 1); EDIT._skip = []; rebuildVariants(); return redrawVars(); }
+  if (d.missrm != null && inEditor) { EDIT.missing.splice(+d.missrm, 1); return redrawMiss(); }
+  if (d.msuse != null && inEditor) { EDIT.marketCents = +d.msuse; EDIT.marketSource = 'TCGplayer, every card in ' + (d.msname || 'the set'); EDIT.marketAt = now(); drawEditor(); toast('Market set. Take off what\u2019s missing.'); return; }
   if (d.optrm != null && inEditor) { const [i, j] = d.optrm.split(':').map(Number); EDIT.opts[i].values = EDIT.opts[i].values.filter(v => v.trim()); EDIT.opts[i].values.splice(j, 1); rebuildVariants(); return redrawVars(); }
   if (d.vdel != null && inEditor) {
     const i = +d.vdel, v = EDIT._vars[i]; if (!v) return;
@@ -6076,13 +6180,14 @@ function onClick(e) {
     case 'close-modal': return closeModal();
     case 'close-drawer': return dismissDrawer();
     case 'ed-cond': return edCondFetch();
+    case 'ms-est': return msEstimate();
     case 'opt-add': if (EDIT) { EDIT.opts = [...(EDIT.opts || []), { name: '', values: [] }]; redrawVars(); const n = $('#optn_' + (EDIT.opts.length - 1)); n && n.focus(); } return;
     case 'var-add': if (EDIT) { const f = EDIT._vars[0] || {}; EDIT._vars.push({ id: '', name: '', opt: {}, sku: '', barcode: '', price: f.price ?? null, qty: 0, photo: '' }); redrawVars(); const n = $$('#edVars [data-vf="name"]').pop(); n && n.focus(); } return;
     case 'var-fill': if (EDIT && EDIT._vars.length) { const p0 = EDIT._vars[0].price; EDIT._vars.forEach(v => { v.price = p0; }); redrawVars(); } return;
     case 'qa-defaults': QA.openDefaults = !QA.openDefaults; renderQADefaults(); if (!QA.openDefaults) { const q = $('#qaQ'); q && q.focus(); } return;
     case 'qa-addsel': return qaAdd(QA.sel, QA.vsel);
     case 'copy-dl': { const ta = $('#dlText'); try { navigator.clipboard.writeText(ta.value).then(() => toast('Copied'), () => { ta.select(); }); } catch { ta.select(); } return; }
-    case 'new-item': return openEditor(null, { kind: INV.lastKind || 'single', finish: (INV.lastKind || 'single') === 'single' ? 'holo' : '' });
+    case 'new-item': { const k = el.dataset.newloc ? (INV.lastKind && INV.lastKind !== 'single' ? INV.lastKind : 'set') : INV.lastKind || 'single'; return openEditor(null, { kind: k, finish: k === 'single' ? 'holo' : '', ...(el.dataset.newloc ? { location: el.dataset.newloc } : {}) }); }
     case 'save-item': { const it = saveEditor(); if (it) INV.lastKind = it.kind; return; }
     case 'save-next': {
       const it = saveEditor({ close: false }); if (!it) return;
@@ -6239,7 +6344,7 @@ async function bootBooth() {
   go(VIEWS[v] ? v : 'register');
   Sync.start();
   // settings upkeep only after this device has the server's copy (never write defaults over real settings)
-  (Sync.ready || Promise.resolve()).then(() => { syncDefaultPct(); fixCheapPrices(); syncLocations(); });
+  (Sync.ready || Promise.resolve()).then(() => { syncDefaultPct(); fixCheapPrices(); syncLocations(); fixShelfTypes(); });
   if (typeof autoPictures === 'function') { setTimeout(autoPictures, 5000); setInterval(autoPictures, 15 * 60e3); }   // cards priced at an older default catch up
   // keep the cart fresh if another device changes stock or prices
   setInterval(() => { if (UI.view === 'register' && !document.activeElement.closest?.('#cart')) renderResults(); }, 30000);

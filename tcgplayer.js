@@ -202,6 +202,36 @@ module.exports = function makeTcgplayer(DATA) {
     out.sort((a, b) => b.score - a.score || String(b.date).localeCompare(String(a.date)) || (b.cents || 0) - (a.cents || 0));
     return out.slice(0, limit).map(({ score, ...r }) => ({ ...r, at: idx.updated ? Date.parse(idx.updated) || idx.syncedAt : idx.syncedAt }));
   }
+  /* What a whole set is worth at TCGplayer market: every card in the set, every printing
+     (normal or holo, reverse holo, and the ball patterns, which TCGplayer lists as their own products).
+     Best-matching sets first, so you can pick the right one. Promos outside the set aren't counted. */
+  function setValue(q, { japanese = false, limit = 4 } = {}) {
+    const want = norm(q); if (!want) return [];
+    const toks = want.split(' ');
+    const cand = [];
+    for (const gid in idx.groups) {
+      const [name, cat, abbr, date] = idx.groups[gid]; if ((cat !== POKEMON) !== japanese) continue;
+      const n = norm(name), a = norm(abbr);
+      let score = 0;
+      if (n === want || a === want) score = 100;
+      else if (toks.every(t => n.split(' ').some(w => w.startsWith(t)))) score = 50 - Math.abs(n.length - want.length) / 10;
+      else continue;
+      if (/\b(promo|trainer kit|jumbo|league|world championship|code card|deck)\b/.test(n) && !/promo|kit|jumbo|league|world|code|deck/.test(want)) score -= 30;
+      cand.push({ gid, name, date, score });
+    }
+    cand.sort((x, y) => y.score - x.score || String(y.date).localeCompare(String(x.date)));
+    return cand.slice(0, limit).map(c => {
+      let cards = 0, printings = 0, cents = 0, unpriced = 0;
+      for (const id in idx.p) {
+        const p = idx.p[id]; if (String(p[1]) !== String(c.gid) || !p[3]) continue;
+        cards++;
+        const pr = idx.pr[id] || {}, vals = Object.values(pr).filter(v => v > 0);
+        if (!vals.length) { unpriced++; continue; }
+        printings += vals.length; cents += vals.reduce((x, v) => x + v, 0);
+      }
+      return { groupId: String(c.gid), name: c.name, date: c.date, cards, printings, cents, unpriced, at: idx.updated ? Date.parse(idx.updated) || idx.syncedAt : idx.syncedAt };
+    }).filter(r => r.cards);
+  }
   const status = () => ({ cards: Object.keys(idx.p).length, sealed: Object.keys(idx.s || {}).length, updated: idx.updated, syncedAt: idx.syncedAt, syncing: !!syncing, partial: !!idx.partial, done: prog.done, total: prog.total, lastError: prog.lastError, lastErrorAt: prog.lastErrorAt });
-  return { sync, start, product, forProducts, find, search, searchSealed, status, numKey };
+  return { sync, start, product, forProducts, find, search, searchSealed, setValue, status, numKey };
 };
